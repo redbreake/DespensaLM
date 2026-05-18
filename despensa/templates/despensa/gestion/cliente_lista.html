@@ -1,0 +1,30 @@
+{% extends 'despensa/gestion/base.html' %}
+
+{% block title %}Clientes - Despensa LM{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Cuentas corrientes</p>
+      <h1>Clientes y fiados</h1>
+    </div>
+    <a class="primary-button" href="{% url 'despensa:cliente_nuevo' %}">Nuevo cliente</a>
+  </header>
+
+  <form class="toolbar" method="get">
+    <input type="search" name="q" value="{{ query }}" placeholder="Buscar cliente o telefono">
+    <button class="secondary-button" type="submit">Buscar</button>
+  </form>
+
+  <section class="cards-grid">
+    {% for cliente in clientes %}
+      <a class="client-card" href="{% url 'despensa:cliente_detalle' cliente.pk %}">
+        <span>{{ cliente.telefono|default:'Sin telefono' }}</span>
+        <strong>{{ cliente.nombre }}</strong>
+        <b>Saldo: ${{ cliente.saldo_total }}</b>
+      </a>
+    {% empty %}
+      <p class="empty-state">No hay clientes cargados.</p>
+    {% endfor %}
+  </section>
+{% endblock %}

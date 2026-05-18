@@ -1,0 +1,42 @@
+{% load static %}
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Gestion - Despensa LM{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'despensa/css/gestion.css' %}">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="{% url 'despensa:gestion_dashboard' %}">
+        <span>LM</span>
+        <strong>Despensa LM</strong>
+      </a>
+      <nav class="side-nav" aria-label="Gestion">
+        <a href="{% url 'despensa:gestion_dashboard' %}">Inicio</a>
+        <a href="{% url 'despensa:producto_lista' %}">Productos</a>
+        <a href="{% url 'despensa:cliente_lista' %}">Clientes y fiados</a>
+        <a href="{% url 'despensa:venta_lista' %}">Caja</a>
+        <a href="{% url 'despensa:catalogo' %}">Ver catalogo</a>
+      </nav>
+      <form method="post" action="{% url 'despensa:logout' %}">
+        {% csrf_token %}
+        <button class="ghost-button" type="submit">Salir</button>
+      </form>
+    </aside>
+
+    <main class="content">
+      {% if messages %}
+        <div class="messages">
+          {% for message in messages %}
+            <p>{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

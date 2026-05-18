@@ -1,0 +1,38 @@
+{% extends 'despensa/gestion/base.html' %}
+
+{% block title %}Caja - Despensa LM{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Caja diaria</p>
+      <h1>Ventas</h1>
+    </div>
+    <a class="primary-button" href="{% url 'despensa:venta_nueva' %}">Nueva venta</a>
+  </header>
+
+  <section class="panel">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Metodo</th>
+          <th>Monto</th>
+          <th>Notas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for venta in ventas %}
+          <tr>
+            <td>{{ venta.fecha }}</td>
+            <td>{{ venta.get_metodo_pago_display }}</td>
+            <td>${{ venta.monto_total }}</td>
+            <td>{{ venta.notas|default:'-' }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4">No hay ventas registradas.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

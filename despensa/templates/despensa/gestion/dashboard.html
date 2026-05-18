@@ -1,0 +1,77 @@
+{% extends 'despensa/gestion/base.html' %}
+
+{% block title %}Inicio - Despensa LM{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Resumen del negocio</p>
+      <h1>Panel de gestion</h1>
+    </div>
+    <div class="header-actions">
+      <a class="secondary-button" href="{% url 'despensa:producto_nuevo' %}">Nuevo producto</a>
+      <a class="primary-button" href="{% url 'despensa:venta_nueva' %}">Registrar venta</a>
+    </div>
+  </header>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <span>Productos</span>
+      <strong>{{ productos_total }}</strong>
+    </article>
+    <article class="stat-card warning">
+      <span>Bajo stock</span>
+      <strong>{{ productos_bajo_stock }}</strong>
+    </article>
+    <article class="stat-card">
+      <span>Clientes</span>
+      <strong>{{ clientes_total }}</strong>
+    </article>
+    <article class="stat-card">
+      <span>Fiado pendiente</span>
+      <strong>${{ saldo_total }}</strong>
+    </article>
+  </section>
+
+  <section class="two-columns">
+    <article class="panel">
+      <div class="panel-title">
+        <h2>Ultimos fiados y pagos</h2>
+        <a href="{% url 'despensa:cliente_lista' %}">Ver clientes</a>
+      </div>
+      <div class="list">
+        {% for movimiento in ultimos_movimientos %}
+          <div class="list-row">
+            <div>
+              <strong>{{ movimiento.cliente.nombre }}</strong>
+              <span>{{ movimiento.descripcion }}</span>
+            </div>
+            <b>${{ movimiento.monto }}</b>
+          </div>
+        {% empty %}
+          <p class="empty-state">Todavia no hay movimientos.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-title">
+        <h2>Ultimas ventas</h2>
+        <a href="{% url 'despensa:venta_lista' %}">Ver caja</a>
+      </div>
+      <div class="list">
+        {% for venta in ultimas_ventas %}
+          <div class="list-row">
+            <div>
+              <strong>{{ venta.get_metodo_pago_display }}</strong>
+              <span>{{ venta.fecha }}</span>
+            </div>
+            <b>${{ venta.monto_total }}</b>
+          </div>
+        {% empty %}
+          <p class="empty-state">Todavia no hay ventas registradas.</p>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+{% endblock %}

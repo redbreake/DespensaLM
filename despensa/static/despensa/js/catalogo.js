@@ -10,6 +10,7 @@
   const countNode = document.querySelector('[data-cart-count]');
   const whatsappButton = document.querySelector('[data-whatsapp]');
   const clearButton = document.querySelector('[data-clear]');
+  const searchInput = document.querySelector('[data-search]');
 
   const readCart = () => JSON.parse(localStorage.getItem(storageKey) || '[]');
   const writeCart = (cart) => localStorage.setItem(storageKey, JSON.stringify(cart));
@@ -90,6 +91,15 @@
     writeCart([]);
     renderCart();
   });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      const term = searchInput.value.trim().toLowerCase();
+      document.querySelectorAll('[data-product]').forEach((product) => {
+        product.hidden = !product.dataset.name.toLowerCase().includes(term);
+      });
+    });
+  }
 
   whatsappButton.addEventListener('click', () => {
     const phone = whatsappButton.dataset.phone;

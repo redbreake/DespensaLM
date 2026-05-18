@@ -1,0 +1,54 @@
+{% extends 'despensa/gestion/base.html' %}
+
+{% block title %}Productos - Despensa LM{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Inventario</p>
+      <h1>Productos</h1>
+    </div>
+    <a class="primary-button" href="{% url 'despensa:producto_nuevo' %}">Nuevo producto</a>
+  </header>
+
+  <form class="toolbar" method="get">
+    <input type="search" name="q" value="{{ query }}" placeholder="Buscar por nombre o codigo">
+    <button class="secondary-button" type="submit">Buscar</button>
+  </form>
+
+  <section class="panel">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th>Venta</th>
+          <th>Stock</th>
+          <th>Catalogo</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for producto in productos %}
+          <tr>
+            <td>
+              <strong>{{ producto.nombre }}</strong>
+              <span>{{ producto.codigo_barras|default:'Sin codigo' }}</span>
+            </td>
+            <td>${{ producto.precio_venta }}</td>
+            <td>
+              {% if producto.bajo_stock %}
+                <span class="badge danger">{{ producto.stock_actual }} bajo</span>
+              {% else %}
+                <span class="badge">{{ producto.stock_actual }}</span>
+              {% endif %}
+            </td>
+            <td>{{ producto.activo_en_catalogo|yesno:'Visible,Oculto' }}</td>
+            <td><a class="table-link" href="{% url 'despensa:producto_editar' producto.pk %}">Editar</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">No hay productos cargados.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

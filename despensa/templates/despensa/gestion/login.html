@@ -1,0 +1,28 @@
+{% load static %}
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ingresar - Despensa LM</title>
+  <link rel="stylesheet" href="{% static 'despensa/css/gestion.css' %}">
+</head>
+<body class="login-page">
+  <main class="login-card">
+    <p class="eyebrow">Gestion interna</p>
+    <h1>Despensa LM</h1>
+    <form method="post">
+      {% csrf_token %}
+      {% if form.errors %}
+        <p class="form-error">Usuario o contrasena incorrectos.</p>
+      {% endif %}
+      <label for="{{ form.username.id_for_label }}">Usuario</label>
+      {{ form.username }}
+      <label for="{{ form.password.id_for_label }}">Contrasena</label>
+      {{ form.password }}
+      <button class="primary-button" type="submit">Ingresar</button>
+    </form>
+    <a class="plain-link" href="{% url 'despensa:catalogo' %}">Volver al catalogo</a>
+  </main>
+</body>
+</html>

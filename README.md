@@ -23,4 +23,6 @@ Variables utiles:
 ## Rutas
 
 - `/`: catalogo publico.
+- `/ingresar/`: login de gestion.
+- `/gestion/`: panel propio para productos, clientes, fiados y caja.
 - `/admin/`: gestion interna de productos, clientes, fiados y ventas diarias.

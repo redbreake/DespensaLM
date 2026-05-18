@@ -9,12 +9,17 @@
 </head>
 <body>
   <header class="topbar">
-    <div>
+    <div class="brand-block">
       <p class="eyebrow">Catalogo online</p>
       <h1>Despensa LM</h1>
+      <span>Pedidos por WhatsApp</span>
     </div>
     <nav class="top-actions" aria-label="Accesos principales">
-      <a class="login-link" href="{% url 'admin:index' %}">Ingresar</a>
+      {% if user.is_authenticated %}
+        <a class="login-link" href="{% url 'despensa:gestion_dashboard' %}">Gestion</a>
+      {% else %}
+        <a class="login-link" href="{% url 'despensa:login' %}">Ingresar</a>
+      {% endif %}
       <button class="cart-toggle" type="button" data-cart-toggle aria-label="Ver carrito">
         Carrito <span data-cart-count>0</span>
       </button>
@@ -22,24 +27,38 @@
   </header>
 
   <main class="layout">
-    <section class="products" aria-label="Productos disponibles">
-      {% for producto in productos %}
-        <article class="product-card" data-product data-id="{{ producto.id }}" data-name="{{ producto.nombre }}" data-price="{{ producto.precio_venta }}">
-          {% if producto.imagen %}
-            <img src="{{ producto.imagen.url }}" alt="{{ producto.nombre }}">
-          {% else %}
-            <div class="product-placeholder" aria-hidden="true">{{ producto.nombre|first }}</div>
-          {% endif %}
-          <div class="product-info">
-            <h2>{{ producto.nombre }}</h2>
-            <p class="stock">Stock disponible: {{ producto.stock_actual }}</p>
-            <p class="price">${{ producto.precio_venta }}</p>
+    <section class="catalog-area">
+      <div class="catalog-heading">
+        <div>
+          <h2>Productos disponibles</h2>
+          <p>Elegis, armas el pedido y lo enviamos directo por WhatsApp.</p>
+        </div>
+        <input class="catalog-search" type="search" placeholder="Buscar producto" data-search>
+      </div>
+
+      <div class="products" aria-label="Productos disponibles">
+        {% for producto in productos %}
+          <article class="product-card" data-product data-id="{{ producto.id }}" data-name="{{ producto.nombre }}" data-price="{{ producto.precio_venta }}">
+            {% if producto.imagen %}
+              <img src="{{ producto.imagen.url }}" alt="{{ producto.nombre }}">
+            {% else %}
+              <div class="product-placeholder" aria-hidden="true">{{ producto.nombre|first }}</div>
+            {% endif %}
+            <div class="product-info">
+              <h3>{{ producto.nombre }}</h3>
+              <p class="stock">Stock disponible: {{ producto.stock_actual }}</p>
+              <p class="price">${{ producto.precio_venta }}</p>
+            </div>
+            <button type="button" data-add>Agregar</button>
+          </article>
+        {% empty %}
+          <div class="empty-card">
+            <h3>Todavia no hay productos publicados</h3>
+            <p>Ingresa al panel de gestion, carga productos con stock y marca "Activo en catalogo".</p>
+            <a href="{% url 'despensa:login' %}">Cargar productos</a>
           </div>
-          <button type="button" data-add>Agregar</button>
-        </article>
-      {% empty %}
-        <p class="empty">Todavia no hay productos disponibles en el catalogo.</p>
-      {% endfor %}
+        {% endfor %}
+      </div>
     </section>
 
     <aside class="cart" data-cart aria-label="Carrito de pedido">

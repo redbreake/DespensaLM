@@ -1,0 +1,21 @@
+{% extends 'despensa/gestion/base.html' %}
+
+{% block title %}{{ titulo }} - Despensa LM{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Carga rapida</p>
+      <h1>{{ titulo }}</h1>
+    </div>
+    <a class="secondary-button" href="{% url volver_url %}">Volver</a>
+  </header>
+
+  <section class="form-panel">
+    <form class="stacked-form" method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button class="primary-button" type="submit">Guardar</button>
+    </form>
+  </section>
+{% endblock %}
