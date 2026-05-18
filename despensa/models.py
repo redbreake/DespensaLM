@@ -63,7 +63,7 @@ class CuentaCorriente(models.Model):
     fecha = models.DateTimeField(auto_now_add=True)
     tipo_movimiento = models.CharField(max_length=10, choices=TipoMovimiento.choices)
     monto = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
-    descripcion = models.CharField(max_length=220)
+    descripcion = models.CharField(max_length=220, blank=True)
 
     class Meta:
         ordering = ['-fecha']

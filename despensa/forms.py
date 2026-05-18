@@ -43,8 +43,21 @@ class CuentaCorrienteForm(forms.ModelForm):
         fields = ('tipo_movimiento', 'monto', 'descripcion')
         widgets = {
             'monto': forms.NumberInput(attrs={'step': '0.01'}),
-            'descripcion': forms.TextInput(attrs={'placeholder': 'Ej: Compra fiada o entrega a cuenta'}),
+            'descripcion': forms.TextInput(attrs={'placeholder': 'Opcional (Por defecto: Mercaderías varias)'}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        descripcion = cleaned_data.get('descripcion', '').strip()
+        tipo_movimiento = cleaned_data.get('tipo_movimiento')
+        
+        if not descripcion and tipo_movimiento:
+            if tipo_movimiento == 'DEUDA':
+                cleaned_data['descripcion'] = 'Mercaderías varias'
+            elif tipo_movimiento == 'PAGO':
+                cleaned_data['descripcion'] = 'Entrega de dinero'
+                
+        return cleaned_data
 
 
 class VentaDiariaForm(forms.ModelForm):
@@ -53,5 +66,11 @@ class VentaDiariaForm(forms.ModelForm):
         fields = ('monto_total', 'metodo_pago', 'notas')
         widgets = {
             'monto_total': forms.NumberInput(attrs={'step': '0.01'}),
-            'notas': forms.TextInput(attrs={'placeholder': 'Detalle opcional'}),
+            'notas': forms.TextInput(attrs={'placeholder': 'Opcional (Por defecto: Mercaderías varias)'}),
         }
+
+    def clean_notas(self):
+        notas = self.cleaned_data.get('notas', '').strip()
+        if not notas:
+            return 'Mercaderías varias'
+        return notas
