@@ -1,4 +1,4 @@
-{% load static %}
+{% load static l10n %}
 <!doctype html>
 <html lang="es-AR">
 <head>
@@ -41,7 +41,7 @@
 
       <div class="products" aria-label="Productos disponibles">
         {% for producto in productos %}
-          <article class="product-card" data-product data-id="{{ producto.id }}" data-name="{{ producto.nombre }}" data-price="{{ producto.precio_venta }}">
+          <article class="product-card" data-product data-id="{{ producto.id }}" data-name="{{ producto.nombre }}" data-price="{{ producto.precio_venta|unlocalize }}">
             {% if producto.imagen %}
               <img src="{{ producto.imagen.url }}" alt="{{ producto.nombre }}">
             {% else %}
