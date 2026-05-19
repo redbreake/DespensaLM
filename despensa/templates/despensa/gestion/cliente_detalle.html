@@ -9,7 +9,15 @@
       <h1>{{ cliente.nombre }}</h1>
       <p class="muted">{{ cliente.telefono|default:'Sin telefono' }}</p>
     </div>
-    <div class="header-actions">
+    <div class="header-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+      {% if whatsapp_url %}
+        <a class="secondary-button" href="{{ whatsapp_url }}" target="_blank" style="background-color: #25D366; color: white; border: none;">
+          Enviar por WhatsApp
+        </a>
+      {% endif %}
+      <button class="secondary-button" onclick="copiarResumen()" id="btn-copiar">
+        Copiar Resumen
+      </button>
       <a class="secondary-button" href="{% url 'despensa:cliente_editar' cliente.pk %}">Editar cliente</a>
       <a class="primary-button" href="{% url 'despensa:cliente_lista' %}">Volver</a>
     </div>
@@ -53,4 +61,24 @@
       </div>
     </article>
   </section>
+
+  <script>
+    function copiarResumen() {
+      const text = `{{ resumen_texto|escapejs }}`;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('btn-copiar');
+        const originalText = btn.innerText;
+        btn.innerText = '¡Copiado!';
+        btn.style.backgroundColor = '#dcfae6';
+        btn.style.color = '#067647';
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.style.backgroundColor = '';
+          btn.style.color = '';
+        }, 2000);
+      }).catch(err => {
+        alert('No se pudo copiar el resumen: ' + err);
+      });
+    }
+  </script>
 {% endblock %}

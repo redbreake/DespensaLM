@@ -5,6 +5,7 @@ from django.db.models import F, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from decimal import Decimal
+from django.utils import timezone
 
 from .forms import ClienteForm, CuentaCorrienteForm, ProductoForm, VentaDiariaForm
 from .models import Cliente, CuentaCorriente, Producto, VentaDiaria
@@ -133,13 +134,44 @@ def cliente_detalle(request, pk):
             return redirect('despensa:cliente_detalle', pk=cliente.pk)
     else:
         form = CuentaCorrienteForm()
+        
+    movimientos = cliente.movimientos.all().order_by('fecha', 'id')
+    
+    # Generar resumen en texto
+    lines = []
+    lines.append(f"*Resumen de Cuenta - Despensa LM*")
+    lines.append(f"Cliente: {cliente.nombre}")
+    lines.append(f"Fecha: {timezone.localtime(timezone.now()).strftime('%d/%m/%Y')}")
+    lines.append("")
+    lines.append("Detalle de movimientos:")
+    for mov in movimientos:
+        fecha_str = mov.fecha.strftime('%d/%m/%Y')
+        tipo = "Compra" if mov.tipo_movimiento == CuentaCorriente.TipoMovimiento.DEUDA else "Pago"
+        monto_signo = "+" if mov.tipo_movimiento == CuentaCorriente.TipoMovimiento.DEUDA else "-"
+        lines.append(f"• {fecha_str} | {tipo}: {mov.descripcion} ({monto_signo}${mov.monto})")
+    
+    lines.append("")
+    lines.append(f"*Saldo Total Pendiente: ${cliente.saldo_total()}*")
+    resumen_texto = "\n".join(lines)
+    
+    # Preparar link de WhatsApp
+    telefono_limpio = "".join(filter(str.isdigit, cliente.telefono)) if cliente.telefono else ""
+    if telefono_limpio and not telefono_limpio.startswith('54'):
+        if len(telefono_limpio) == 10:
+            telefono_limpio = "549" + telefono_limpio
+            
+    import urllib.parse
+    whatsapp_url = f"https://wa.me/{telefono_limpio}?text={urllib.parse.quote(resumen_texto)}" if telefono_limpio else ""
+
     return render(
         request,
         'despensa/gestion/cliente_detalle.html',
         {
             'cliente': cliente,
             'form': form,
-            'movimientos': cliente.movimientos.all(),
+            'movimientos': cliente.movimientos.all().order_by('-fecha', '-id'),
+            'resumen_texto': resumen_texto,
+            'whatsapp_url': whatsapp_url,
         },
     )
 @login_required
