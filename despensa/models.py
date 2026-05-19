@@ -3,6 +3,7 @@ from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from django.core.validators import MinValueValidator
 from decimal import Decimal
+from django.utils import timezone
 
 
 class Producto(models.Model):
@@ -81,7 +82,7 @@ class VentaDiaria(models.Model):
         DEBITO = 'DEBITO', 'Debito'
         FIADO = 'FIADO', 'Fiado'
 
-    fecha = models.DateField(auto_now_add=True)
+    fecha = models.DateField('fecha', default=timezone.localdate)
     monto_total = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     metodo_pago = models.CharField(max_length=20, choices=MetodoPago.choices)
     notas = models.CharField(max_length=220, blank=True)

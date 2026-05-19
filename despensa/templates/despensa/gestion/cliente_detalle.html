@@ -34,12 +34,18 @@
       </div>
       <div class="list">
         {% for movimiento in movimientos %}
-          <div class="list-row">
+          <div class="list-row" style="display: flex; justify-content: space-between; align-items: center;">
             <div>
               <strong>{{ movimiento.get_tipo_movimiento_display }}</strong>
               <span>{{ movimiento.descripcion }} - {{ movimiento.fecha }}</span>
             </div>
-            <b>${{ movimiento.monto }}</b>
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <b>${{ movimiento.monto }}</b>
+              <form method="post" action="{% url 'despensa:movimiento_eliminar' movimiento.pk %}" style="display: inline;" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este movimiento?');">
+                {% csrf_token %}
+                <button type="submit" style="background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.85rem; font-weight: 800; padding: 0;">Eliminar</button>
+              </form>
+            </div>
           </div>
         {% empty %}
           <p class="empty-state">Sin movimientos todavia.</p>

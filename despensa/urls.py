@@ -18,6 +18,7 @@ urlpatterns = [
     path('gestion/clientes/nuevo/', views.cliente_formulario, name='cliente_nuevo'),
     path('gestion/clientes/<int:pk>/', views.cliente_detalle, name='cliente_detalle'),
     path('gestion/clientes/<int:pk>/editar/', views.cliente_formulario, name='cliente_editar'),
+    path('gestion/movimientos/<int:pk>/eliminar/', views.movimiento_eliminar, name='movimiento_eliminar'),
     path('gestion/ventas/', views.venta_lista, name='venta_lista'),
     path('gestion/ventas/nueva/', views.venta_formulario, name='venta_nueva'),
 ]

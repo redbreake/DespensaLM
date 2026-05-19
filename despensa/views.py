@@ -142,12 +142,47 @@ def cliente_detalle(request, pk):
             'movimientos': cliente.movimientos.all(),
         },
     )
+@login_required
+def movimiento_eliminar(request, pk):
+    movimiento = get_object_or_404(CuentaCorriente, pk=pk)
+    cliente_id = movimiento.cliente.pk
+    if request.method == 'POST':
+        movimiento.delete()
+        messages.success(request, 'Movimiento eliminado correctamente.')
+    return redirect('despensa:cliente_detalle', pk=cliente_id)
 
 
 @login_required
 def venta_lista(request):
-    ventas = VentaDiaria.objects.all()
-    return render(request, 'despensa/gestion/venta_lista.html', {'ventas': ventas})
+    ventas = VentaDiaria.objects.all().order_by('-fecha', '-id')
+    
+    # Resumen de ventas
+    total_general = ventas.aggregate(total=Coalesce(Sum('monto_total'), Decimal('0.00')))['total']
+    
+    # Agrupar por metodo de pago
+    resumen_raw = (
+        ventas.values('metodo_pago')
+        .annotate(total=Coalesce(Sum('monto_total'), Decimal('0.00')))
+        .order_by('metodo_pago')
+    )
+    choices_dict = dict(VentaDiaria.MetodoPago.choices)
+    resumen_metodos = [
+        {
+            'nombre': choices_dict.get(item['metodo_pago'], item['metodo_pago']),
+            'total': item['total']
+        }
+        for item in resumen_raw
+    ]
+    
+    return render(
+        request, 
+        'despensa/gestion/venta_lista.html', 
+        {
+            'ventas': ventas,
+            'total_general': total_general,
+            'resumen_metodos': resumen_metodos,
+        }
+    )
 
 
 @login_required

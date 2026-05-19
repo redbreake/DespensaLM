@@ -11,6 +11,19 @@
     <a class="primary-button" href="{% url 'despensa:venta_nueva' %}">Nueva venta</a>
   </header>
 
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span>Total General Ventas</span>
+      <strong>${{ total_general }}</strong>
+    </div>
+    {% for metodo in resumen_metodos %}
+      <div class="stat-card">
+        <span>Total {{ metodo.nombre }}</span>
+        <strong>${{ metodo.total }}</strong>
+      </div>
+    {% endfor %}
+  </div>
+
   <section class="panel">
     <table class="data-table">
       <thead>

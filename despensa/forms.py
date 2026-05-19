@@ -63,8 +63,9 @@ class CuentaCorrienteForm(forms.ModelForm):
 class VentaDiariaForm(forms.ModelForm):
     class Meta:
         model = VentaDiaria
-        fields = ('monto_total', 'metodo_pago', 'notas')
+        fields = ('fecha', 'monto_total', 'metodo_pago', 'notas')
         widgets = {
+            'fecha': forms.DateInput(attrs={'type': 'date'}),
             'monto_total': forms.NumberInput(attrs={'step': '0.01'}),
             'notas': forms.TextInput(attrs={'placeholder': 'Opcional (Por defecto: Mercaderías varias)'}),
         }
