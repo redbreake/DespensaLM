@@ -81,6 +81,15 @@ def producto_formulario(request, pk=None):
 
 
 @login_required
+def producto_eliminar(request, pk):
+    producto = get_object_or_404(Producto, pk=pk)
+    if request.method == 'POST':
+        producto.delete()
+        messages.success(request, 'Producto eliminado correctamente.')
+    return redirect('despensa:producto_lista')
+
+
+@login_required
 def cliente_lista(request):
     query = request.GET.get('q', '').strip()
     clientes = Cliente.objects.all()
