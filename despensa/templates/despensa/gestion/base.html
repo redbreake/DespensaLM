@@ -10,21 +10,28 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="{% url 'despensa:gestion_dashboard' %}">
-        <img src="{% static 'despensa/img/logo.png' %}" alt="Logo" style="height: 32px; width: 32px; object-fit: cover; border-radius: 4px; flex-shrink: 0;">
-        <strong>Despensa LM</strong>
-      </a>
-      <nav class="side-nav" aria-label="Gestion">
-        <a href="{% url 'despensa:gestion_dashboard' %}">Inicio</a>
-        <a href="{% url 'despensa:producto_lista' %}">Productos</a>
-        <a href="{% url 'despensa:cliente_lista' %}">Clientes y fiados</a>
-        <a href="{% url 'despensa:venta_lista' %}">Caja</a>
-        <a href="{% url 'despensa:catalogo' %}">Ver catalogo</a>
-      </nav>
-      <form method="post" action="{% url 'despensa:logout' %}">
-        {% csrf_token %}
-        <button class="ghost-button" type="submit">Salir</button>
-      </form>
+      <div class="sidebar-header">
+        <a class="brand" href="{% url 'despensa:gestion_dashboard' %}">
+          <img src="{% static 'despensa/img/logo.png' %}" alt="Logo" style="height: 32px; width: 32px; object-fit: cover; border-radius: 4px; flex-shrink: 0;">
+          <strong>Despensa LM</strong>
+        </a>
+        <button class="menu-toggle" id="menuToggle" aria-label="Menú" onclick="toggleMobileMenu()">
+          <span id="menuIcon">☰</span>
+        </button>
+      </div>
+      <div class="sidebar-content" id="sidebarContent">
+        <nav class="side-nav" aria-label="Gestion">
+          <a href="{% url 'despensa:gestion_dashboard' %}">Inicio</a>
+          <a href="{% url 'despensa:producto_lista' %}">Productos</a>
+          <a href="{% url 'despensa:cliente_lista' %}">Clientes y fiados</a>
+          <a href="{% url 'despensa:venta_lista' %}">Caja</a>
+          <a href="{% url 'despensa:catalogo' %}">Ver catalogo</a>
+        </nav>
+        <form method="post" action="{% url 'despensa:logout' %}">
+          {% csrf_token %}
+          <button class="ghost-button" type="submit">Salir</button>
+        </form>
+      </div>
     </aside>
 
     <main class="content">
@@ -38,5 +45,18 @@
       {% block content %}{% endblock %}
     </main>
   </div>
+
+  <script>
+    function toggleMobileMenu() {
+      const content = document.getElementById('sidebarContent');
+      const icon = document.getElementById('menuIcon');
+      content.classList.toggle('active');
+      if (content.classList.contains('active')) {
+        icon.textContent = '✕';
+      } else {
+        icon.textContent = '☰';
+      }
+    }
+  </script>
 </body>
 </html>
