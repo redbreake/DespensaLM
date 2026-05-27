@@ -80,5 +80,16 @@
         alert('No se pudo copiar el resumen: ' + err);
       });
     }
+
+    // Enfocar automáticamente el campo de monto para facilitar la carga en el móvil
+    window.addEventListener('DOMContentLoaded', () => {
+      const montoInput = document.querySelector('input[name="monto"]');
+      if (montoInput) {
+        // Un pequeño retraso asegura que el navegador procese el foco correctamente
+        setTimeout(() => {
+          montoInput.focus();
+        }, 100);
+      }
+    });
   </script>
 {% endblock %}
