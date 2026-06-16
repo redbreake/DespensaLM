@@ -21,4 +21,14 @@ urlpatterns = [
     path('gestion/movimientos/<int:pk>/eliminar/', views.movimiento_eliminar, name='movimiento_eliminar'),
     path('gestion/ventas/', views.venta_lista, name='venta_lista'),
     path('gestion/ventas/nueva/', views.venta_formulario, name='venta_nueva'),
+
+    # API Endpoints para App Android
+    path('api/login/', views.api_login, name='api_login'),
+    path('api/productos/buscar/', views.api_producto_buscar, name='api_producto_buscar'),
+    path('api/productos/', views.api_producto_lista, name='api_producto_lista'),
+    path('api/productos/guardar/', views.api_producto_guardar, name='api_producto_crear'),
+    path('api/productos/<int:pk>/editar/', views.api_producto_guardar, name='api_producto_editar'),
+    path('api/clientes/', views.api_cliente_lista, name='api_cliente_lista'),
+    path('api/ventas/', views.api_venta_crear, name='api_venta_crear'),
 ]
+

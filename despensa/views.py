@@ -1,14 +1,20 @@
+import json
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import F, Q, Sum
 from django.db.models.functions import Coalesce
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.csrf import csrf_exempt
 from decimal import Decimal
 from django.utils import timezone
 
 from .forms import ClienteForm, CuentaCorrienteForm, ProductoForm, VentaDiariaForm
 from .models import Cliente, CuentaCorriente, Producto, VentaDiaria
+
 
 
 def catalogo_publico(request):
@@ -236,3 +242,240 @@ def venta_formulario(request):
             'volver_url': 'despensa:venta_lista',
         },
     )
+
+
+# --- API Endpoints para App Android ---
+
+def api_login_required(view_func):
+    @csrf_exempt
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'No autorizado'}, status=401)
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
+@csrf_exempt
+def api_login(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        username = data.get('username')
+        password = data.get('password')
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+        
+    user = authenticate(request, username=username, password=password)
+    if user is not None:
+        login(request, user)
+        return JsonResponse({
+            'success': True,
+            'user': {
+                'username': user.username,
+                'email': user.email
+            }
+        })
+    else:
+        return JsonResponse({'success': False, 'error': 'Credenciales incorrectas'}, status=401)
+
+
+@api_login_required
+def api_producto_buscar(request):
+    codigo = request.GET.get('codigo_barras', '').strip()
+    if not codigo:
+        return JsonResponse({'error': 'Código de barras no provisto'}, status=400)
+    try:
+        producto = Producto.objects.get(codigo_barras=codigo)
+        return JsonResponse({
+            'id': producto.id,
+            'codigo_barras': producto.codigo_barras,
+            'nombre': producto.nombre,
+            'precio_costo': str(producto.precio_costo),
+            'precio_venta': str(producto.precio_venta),
+            'stock_actual': producto.stock_actual,
+            'stock_minimo': producto.stock_minimo,
+            'activo_en_catalogo': producto.activo_en_catalogo,
+            'imagen_url': request.build_absolute_uri(producto.imagen.url) if producto.imagen else None
+        })
+    except Producto.DoesNotExist:
+        return JsonResponse({'error': 'Producto no encontrado'}, status=404)
+
+
+@api_login_required
+def api_producto_lista(request):
+    query = request.GET.get('q', '').strip()
+    productos = Producto.objects.all()
+    if query:
+        productos = productos.filter(Q(nombre__icontains=query) | Q(codigo_barras__icontains=query))
+    
+    data = []
+    for prod in productos:
+        data.append({
+            'id': prod.id,
+            'codigo_barras': prod.codigo_barras,
+            'nombre': prod.nombre,
+            'precio_costo': str(prod.precio_costo),
+            'precio_venta': str(prod.precio_venta),
+            'stock_actual': prod.stock_actual,
+            'stock_minimo': prod.stock_minimo,
+            'activo_en_catalogo': prod.activo_en_catalogo,
+            'imagen_url': request.build_absolute_uri(prod.imagen.url) if prod.imagen else None
+        })
+    return JsonResponse(data, safe=False)
+
+
+@api_login_required
+def api_producto_guardar(request, pk=None):
+    if request.method not in ['POST', 'PUT']:
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    
+    producto = None
+    if pk:
+        producto = get_object_or_404(Producto, pk=pk)
+        
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    
+    codigo = data.get('codigo_barras', '').strip() or None
+    if codigo:
+        exists_query = Producto.objects.filter(codigo_barras=codigo)
+        if producto:
+            exists_query = exists_query.exclude(pk=producto.pk)
+        if exists_query.exists():
+            return JsonResponse({'error': 'Ya existe un producto con este código de barras'}, status=400)
+
+    nombre = data.get('nombre')
+    precio_costo = data.get('precio_costo')
+    precio_venta = data.get('precio_venta')
+    stock_actual = data.get('stock_actual')
+    stock_minimo = data.get('stock_minimo', 5)
+    activo_en_catalogo = data.get('activo_en_catalogo', True)
+
+    if not producto and not nombre:
+        return JsonResponse({'error': 'El nombre es obligatorio'}, status=400)
+
+    try:
+        if producto:
+            if nombre is not None: producto.nombre = nombre
+            if codigo is not None: producto.codigo_barras = codigo
+            if precio_costo is not None: producto.precio_costo = Decimal(str(precio_costo))
+            if precio_venta is not None: producto.precio_venta = Decimal(str(precio_venta))
+            if stock_actual is not None: producto.stock_actual = int(stock_actual)
+            if stock_minimo is not None: producto.stock_minimo = int(stock_minimo)
+            if activo_en_catalogo is not None: producto.activo_en_catalogo = bool(activo_en_catalogo)
+            producto.save()
+        else:
+            producto = Producto.objects.create(
+                nombre=nombre,
+                codigo_barras=codigo,
+                precio_costo=Decimal(str(precio_costo or '0.00')),
+                precio_venta=Decimal(str(precio_venta or '0.00')),
+                stock_actual=int(stock_actual or 0),
+                stock_minimo=int(stock_minimo),
+                activo_en_catalogo=bool(activo_en_catalogo)
+            )
+    except Exception as e:
+        return JsonResponse({'error': f'Error al guardar producto: {str(e)}'}, status=400)
+
+    return JsonResponse({
+        'id': producto.id,
+        'codigo_barras': producto.codigo_barras,
+        'nombre': producto.nombre,
+        'precio_costo': str(producto.precio_costo),
+        'precio_venta': str(producto.precio_venta),
+        'stock_actual': producto.stock_actual,
+        'stock_minimo': producto.stock_minimo,
+        'activo_en_catalogo': producto.activo_en_catalogo,
+        'imagen_url': request.build_absolute_uri(producto.imagen.url) if producto.imagen else None
+    }, status=200 if pk else 201)
+
+
+@api_login_required
+def api_cliente_lista(request):
+    clientes = Cliente.objects.all()
+    data = []
+    for cli in clientes:
+        data.append({
+            'id': cli.id,
+            'nombre': cli.nombre,
+            'telefono': cli.telefono,
+            'saldo_actual': str(cli.saldo_total())
+        })
+    return JsonResponse(data, safe=False)
+
+
+@api_login_required
+def api_venta_crear(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    
+    monto_total = data.get('monto_total')
+    metodo_pago = data.get('metodo_pago')
+    notas = data.get('notas', '').strip()
+    cliente_id = data.get('cliente_id')
+    items = data.get('items', [])
+    
+    if not monto_total or not metodo_pago:
+        return JsonResponse({'error': 'Monto total y método de pago son requeridos'}, status=400)
+        
+    if metodo_pago not in dict(VentaDiaria.MetodoPago.choices):
+        return JsonResponse({'error': 'Método de pago inválido'}, status=400)
+        
+    if metodo_pago == 'FIADO' and not cliente_id:
+        return JsonResponse({'error': 'Se requiere un cliente para compras fiadas'}, status=400)
+
+    cliente = None
+    if cliente_id:
+        try:
+            cliente = Cliente.objects.get(pk=cliente_id)
+        except Cliente.DoesNotExist:
+            return JsonResponse({'error': 'Cliente no encontrado'}, status=404)
+
+    try:
+        with transaction.atomic():
+            venta = VentaDiaria.objects.create(
+                monto_total=Decimal(str(monto_total)),
+                metodo_pago=metodo_pago,
+                notas=notas or 'Venta desde App Móvil'
+            )
+            
+            if metodo_pago == 'FIADO' and cliente:
+                CuentaCorriente.objects.create(
+                    cliente=cliente,
+                    tipo_movimiento=CuentaCorriente.TipoMovimiento.DEUDA,
+                    monto=Decimal(str(monto_total)),
+                    descripcion=notas or 'Compra fiada (App Móvil)'
+                )
+                
+            for item in items:
+                prod_id = item.get('producto_id')
+                cant = int(item.get('cantidad', 0))
+                if prod_id and cant > 0:
+                    producto = Producto.objects.select_for_update().get(pk=prod_id)
+                    producto.stock_actual = max(0, producto.stock_actual - cant)
+                    producto.save()
+                    
+            response_data = {
+                'success': True,
+                'venta_id': venta.id,
+                'monto_total': str(venta.monto_total)
+            }
+            if cliente:
+                response_data['nuevo_saldo_cliente'] = str(cliente.saldo_total())
+                
+            return JsonResponse(response_data, status=201)
+            
+    except Producto.DoesNotExist:
+        return JsonResponse({'error': 'Uno de los productos provistos no existe'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': f'Error al procesar la venta: {str(e)}'}, status=500)
+
