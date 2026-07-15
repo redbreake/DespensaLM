@@ -28,7 +28,10 @@ urlpatterns = [
     path('api/productos/', views.api_producto_lista, name='api_producto_lista'),
     path('api/productos/guardar/', views.api_producto_guardar, name='api_producto_crear'),
     path('api/productos/<int:pk>/editar/', views.api_producto_guardar, name='api_producto_editar'),
+    path('api/productos/<int:pk>/eliminar/', views.api_producto_eliminar, name='api_producto_eliminar'),
     path('api/clientes/', views.api_cliente_lista, name='api_cliente_lista'),
+    path('api/clientes/guardar/', views.api_cliente_guardar, name='api_cliente_crear'),
+    path('api/clientes/<int:pk>/editar/', views.api_cliente_guardar, name='api_cliente_editar'),
+    path('api/clientes/<int:pk>/movimientos/', views.api_cliente_movimientos, name='api_cliente_movimientos'),
     path('api/ventas/', views.api_venta_crear, name='api_venta_crear'),
 ]
-

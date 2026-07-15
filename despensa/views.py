@@ -395,17 +395,98 @@ def api_producto_guardar(request, pk=None):
 
 
 @api_login_required
+def api_producto_eliminar(request, pk):
+    if request.method != 'DELETE':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    producto = get_object_or_404(Producto, pk=pk)
+    producto.delete()
+    return JsonResponse({'success': True})
+
+
+def _cliente_data(cliente):
+    return {
+        'id': cliente.id,
+        'nombre': cliente.nombre,
+        'telefono': cliente.telefono,
+        'notas': cliente.notas,
+        'saldo_actual': f'{cliente.saldo_total():.2f}',
+    }
+
+
+@api_login_required
 def api_cliente_lista(request):
-    clientes = Cliente.objects.all()
-    data = []
-    for cli in clientes:
-        data.append({
-            'id': cli.id,
-            'nombre': cli.nombre,
-            'telefono': cli.telefono,
-            'saldo_actual': str(cli.saldo_total())
+    return JsonResponse([_cliente_data(cliente) for cliente in Cliente.objects.all()], safe=False)
+
+
+@api_login_required
+def api_cliente_guardar(request, pk=None):
+    if request.method not in ['POST', 'PUT']:
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    nombre = str(data.get('nombre', '')).strip()
+    if not nombre:
+        return JsonResponse({'error': 'El nombre es obligatorio'}, status=400)
+
+    cliente = get_object_or_404(Cliente, pk=pk) if pk else Cliente()
+    cliente.nombre = nombre
+    cliente.telefono = str(data.get('telefono', '')).strip()
+    if 'notas' in data:
+        cliente.notas = str(data.get('notas') or '').strip()
+    cliente.save()
+    return JsonResponse(_cliente_data(cliente), status=200 if pk else 201)
+
+
+@api_login_required
+def api_cliente_movimientos(request, pk):
+    cliente = get_object_or_404(Cliente, pk=pk)
+
+    if request.method == 'GET':
+        movimientos = [
+            {
+                'id': movimiento.id,
+                'fecha': timezone.localtime(movimiento.fecha).isoformat(),
+                'tipo_movimiento': movimiento.tipo_movimiento,
+                'monto': str(movimiento.monto),
+                'descripcion': movimiento.descripcion,
+            }
+            for movimiento in cliente.movimientos.all()
+        ]
+        return JsonResponse({
+            'cliente': _cliente_data(cliente),
+            'movimientos': movimientos,
         })
-    return JsonResponse(data, safe=False)
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        monto = Decimal(str(data.get('monto')))
+    except (json.JSONDecodeError, TypeError, ValueError, ArithmeticError):
+        return JsonResponse({'error': 'El monto no es válido'}, status=400)
+
+    tipo = data.get('tipo_movimiento')
+    if tipo not in dict(CuentaCorriente.TipoMovimiento.choices):
+        return JsonResponse({'error': 'Tipo de movimiento inválido'}, status=400)
+    if monto <= 0:
+        return JsonResponse({'error': 'El monto debe ser mayor que cero'}, status=400)
+
+    movimiento = CuentaCorriente.objects.create(
+        cliente=cliente,
+        tipo_movimiento=tipo,
+        monto=monto,
+        descripcion=str(data.get('descripcion', '')).strip(),
+    )
+    return JsonResponse({
+        'id': movimiento.id,
+        'saldo_actual': f'{cliente.saldo_total():.2f}',
+    }, status=201)
 
 
 @api_login_required
@@ -478,4 +559,3 @@ def api_venta_crear(request):
         return JsonResponse({'error': 'Uno de los productos provistos no existe'}, status=400)
     except Exception as e:
         return JsonResponse({'error': f'Error al procesar la venta: {str(e)}'}, status=500)
-
