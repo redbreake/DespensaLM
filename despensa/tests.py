@@ -1,11 +1,12 @@
 from decimal import Decimal
 import json
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Cliente, CuentaCorriente, Producto
+from .models import Cliente, CuentaCorriente, Producto, VentaDiaria, VentaItem
 
 
 class ClienteTests(TestCase):
@@ -132,3 +133,160 @@ class ApiAppTests(TestCase):
         response = self.client.get(reverse('despensa:api_cliente_lista'))
 
         self.assertEqual(response.status_code, 401)
+
+
+class ApiVentaTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='operador', password='clave-test')
+        self.client.force_login(self.user)
+        self.producto = Producto.objects.create(
+            nombre='Yerba',
+            precio_costo=Decimal('1000.00'),
+            precio_venta=Decimal('1500.00'),
+            stock_actual=5,
+        )
+        self.cliente = Cliente.objects.create(nombre='María')
+        self.operacion_id = str(uuid4())
+
+    def payload(self, **overrides):
+        data = {
+            'operacion_id': self.operacion_id,
+            'fecha': '2026-07-20',
+            'monto_total': '3000.00',
+            'metodo_pago': 'EFECTIVO',
+            'notas': 'Venta de prueba',
+            'cliente_id': None,
+            'items': [
+                {
+                    'producto_id': self.producto.id,
+                    'cantidad': 2,
+                    'precio_unitario': '1500.00',
+                }
+            ],
+        }
+        data.update(overrides)
+        return data
+
+    def registrar(self, payload):
+        return self.client.post(
+            reverse('despensa:api_venta_crear'),
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+
+    def test_crea_venta_detallada_con_fecha_original_y_descuenta_stock(self):
+        response = self.registrar(self.payload())
+
+        self.assertEqual(response.status_code, 201)
+        venta = VentaDiaria.objects.get()
+        item = VentaItem.objects.get()
+        self.producto.refresh_from_db()
+
+        self.assertEqual(str(venta.operacion_id), self.operacion_id)
+        self.assertEqual(venta.fecha.isoformat(), '2026-07-20')
+        self.assertEqual(venta.monto_total, Decimal('3000.00'))
+        self.assertEqual(item.producto, self.producto)
+        self.assertEqual(item.nombre_producto, 'Yerba')
+        self.assertEqual(item.cantidad, 2)
+        self.assertEqual(item.precio_unitario, Decimal('1500.00'))
+        self.assertEqual(item.subtotal, Decimal('3000.00'))
+        self.assertEqual(self.producto.stock_actual, 3)
+
+    def test_reintento_idempotente_no_duplica_venta_stock_ni_fiado(self):
+        payload = self.payload(
+            metodo_pago='FIADO',
+            cliente_id=self.cliente.id,
+        )
+
+        primera = self.registrar(payload)
+        segunda = self.registrar(payload)
+        self.producto.refresh_from_db()
+
+        self.assertEqual(primera.status_code, 201)
+        self.assertEqual(segunda.status_code, 200)
+        self.assertTrue(segunda.json()['duplicada'])
+        self.assertEqual(VentaDiaria.objects.count(), 1)
+        self.assertEqual(VentaItem.objects.count(), 1)
+        self.assertEqual(CuentaCorriente.objects.count(), 1)
+        self.assertEqual(self.producto.stock_actual, 3)
+        self.assertEqual(self.cliente.saldo_total(), Decimal('3000.00'))
+
+    def test_stock_insuficiente_rechaza_toda_la_venta(self):
+        otro = Producto.objects.create(
+            nombre='Azúcar',
+            precio_costo=Decimal('500.00'),
+            precio_venta=Decimal('800.00'),
+            stock_actual=0,
+        )
+        payload = self.payload(
+            monto_total='3800.00',
+            items=[
+                {
+                    'producto_id': self.producto.id,
+                    'cantidad': 2,
+                    'precio_unitario': '1500.00',
+                },
+                {
+                    'producto_id': otro.id,
+                    'cantidad': 1,
+                    'precio_unitario': '800.00',
+                },
+            ],
+        )
+
+        response = self.registrar(payload)
+        self.producto.refresh_from_db()
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(VentaDiaria.objects.count(), 0)
+        self.assertEqual(VentaItem.objects.count(), 0)
+        self.assertEqual(self.producto.stock_actual, 5)
+
+    def test_total_inconsistente_se_rechaza_sin_modificar_datos(self):
+        response = self.registrar(self.payload(monto_total='1.00'))
+        self.producto.refresh_from_db()
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['monto_calculado'], '3000.00')
+        self.assertEqual(VentaDiaria.objects.count(), 0)
+        self.assertEqual(self.producto.stock_actual, 5)
+
+    def test_items_repetidos_se_agrupan_antes_de_validar_stock(self):
+        response = self.registrar(self.payload(
+            items=[
+                {
+                    'producto_id': self.producto.id,
+                    'cantidad': 1,
+                    'precio_unitario': '1500.00',
+                },
+                {
+                    'producto_id': self.producto.id,
+                    'cantidad': 1,
+                    'precio_unitario': '1500.00',
+                },
+            ],
+        ))
+        self.producto.refresh_from_db()
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(VentaItem.objects.get().cantidad, 2)
+        self.assertEqual(self.producto.stock_actual, 3)
+
+    def test_cliente_anterior_sin_uuid_usa_precio_actual_del_servidor(self):
+        payload = self.payload()
+        payload.pop('operacion_id')
+        payload['monto_total'] = '10.00'
+        payload['items'][0].pop('precio_unitario')
+
+        response = self.registrar(payload)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['monto_total'], '3000.00')
+        self.assertIsNone(VentaDiaria.objects.get().operacion_id)
+
+    def test_fecha_invalida_se_rechaza(self):
+        response = self.registrar(self.payload(fecha='20/07/2026'))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(VentaDiaria.objects.count(), 0)

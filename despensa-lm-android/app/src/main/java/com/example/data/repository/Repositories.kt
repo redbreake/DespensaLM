@@ -8,6 +8,7 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 class ProductRepository(
     private val productDao: ProductDao,
@@ -302,10 +303,12 @@ class SalesRepository(
     ): Pair<Boolean, String> = withContext(Dispatchers.IO) {
         val api = networkService.getApi()
         val itemsJson = itemsAdapter.toJson(items)
+        val operationId = UUID.randomUUID().toString()
 
         if (api != null) {
             try {
                 val request = SaleRequest(
+                    operacionId = operationId,
                     fecha = fecha,
                     montoTotal = montoTotal,
                     metodoPago = metodoPago,
@@ -323,6 +326,7 @@ class SalesRepository(
                         offlineSaleDao.insertSale(
                             OfflineSale(
                                 fecha = fecha,
+                                operation_id = operationId,
                                 monto_total = montoTotal,
                                 metodo_pago = metodoPago,
                                 notas = notas,
@@ -335,6 +339,11 @@ class SalesRepository(
                     } else {
                         return@withContext Pair(false, "Error: ${body.error ?: "desconocido"}")
                     }
+                } else if (!response.isSuccessful) {
+                    return@withContext Pair(
+                        false,
+                        apiError(response.code(), response.errorBody()?.string())
+                    )
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -346,6 +355,7 @@ class SalesRepository(
         offlineSaleDao.insertSale(
             OfflineSale(
                 fecha = fecha,
+                operation_id = operationId,
                 monto_total = montoTotal,
                 metodo_pago = metodoPago,
                 notas = notas,
@@ -378,6 +388,7 @@ class SalesRepository(
                 val itemsList: List<SaleItemRequest>? = itemsAdapter.fromJson(sale.items_json)
                 if (itemsList != null) {
                     val request = SaleRequest(
+                        operacionId = sale.operation_id,
                         fecha = sale.fecha,
                         montoTotal = sale.monto_total,
                         metodoPago = sale.metodo_pago,
@@ -396,5 +407,16 @@ class SalesRepository(
             }
         }
         return@withContext successCount
+    }
+
+    private fun apiError(code: Int, body: String?): String {
+        if (body.isNullOrBlank()) return "Error del servidor (código $code)"
+        if (body.trimStart().startsWith("<")) {
+            return "El servidor devolvió una respuesta inesperada."
+        }
+        return body.replace(Regex("[{}\"\\[\\]]"), "")
+            .replace(":", ": ")
+            .trim()
+            .take(200)
     }
 }

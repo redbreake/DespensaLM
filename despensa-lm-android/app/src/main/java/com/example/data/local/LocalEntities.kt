@@ -1,6 +1,7 @@
 package com.example.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "cached_products")
@@ -24,9 +25,13 @@ data class CachedClient(
     val saldo_actual: Double
 )
 
-@Entity(tableName = "offline_sales")
+@Entity(
+    tableName = "offline_sales",
+    indices = [Index(value = ["operation_id"], unique = true)]
+)
 data class OfflineSale(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val operation_id: String,
     val fecha: String,
     val monto_total: Double,
     val metodo_pago: String,

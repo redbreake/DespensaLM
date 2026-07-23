@@ -11,9 +11,11 @@ class SessionCookieJar(context: Context) : CookieJar {
     @Synchronized
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         val editor = prefs.edit()
+        editor.putString("cookie_host", url.host)
         for (cookie in cookies) {
             if (cookie.name == "sessionid" || cookie.name == "csrftoken") {
                 editor.putString(cookie.name, cookie.value)
+                editor.putBoolean("${cookie.name}_secure", cookie.secure)
             }
         }
         editor.apply()
@@ -22,32 +24,40 @@ class SessionCookieJar(context: Context) : CookieJar {
     @Synchronized
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
         val host = url.host
-        val buildCookies = mutableListOf<Cookie>()
-        
         val sessionId = prefs.getString("sessionid", null)
         val csrfToken = prefs.getString("csrftoken", null)
-        
-        if (sessionId != null) {
-            buildCookies.add(
-                Cookie.Builder()
-                    .name("sessionid")
-                    .value(sessionId)
-                    .domain(host)
-                    .path("/")
-                    .build()
-            )
+        val savedHost = prefs.getString("cookie_host", null)
+        if (savedHost == null && (sessionId != null || csrfToken != null)) {
+            prefs.edit().putString("cookie_host", host).apply()
+        } else if (savedHost != host) {
+            return emptyList()
         }
-        if (csrfToken != null) {
-            buildCookies.add(
-                Cookie.Builder()
-                    .name("csrftoken")
-                    .value(csrfToken)
-                    .domain(host)
-                    .path("/")
-                    .build()
-            )
+
+        val buildCookies = mutableListOf<Cookie>()
+
+        if (sessionId != null && canSendCookie("sessionid", url)) {
+            buildCookies.add(buildCookie("sessionid", sessionId, host, url))
+        }
+        if (csrfToken != null && canSendCookie("csrftoken", url)) {
+            buildCookies.add(buildCookie("csrftoken", csrfToken, host, url))
         }
         return buildCookies
+    }
+
+    private fun canSendCookie(name: String, url: HttpUrl): Boolean {
+        return !prefs.getBoolean("${name}_secure", false) || url.isHttps
+    }
+
+    private fun buildCookie(name: String, value: String, host: String, url: HttpUrl): Cookie {
+        val builder = Cookie.Builder()
+            .name(name)
+            .value(value)
+            .hostOnlyDomain(host)
+            .path("/")
+        if (prefs.getBoolean("${name}_secure", false) && url.isHttps) {
+            builder.secure()
+        }
+        return builder.build()
     }
 
     fun getCsrfToken(): String? {

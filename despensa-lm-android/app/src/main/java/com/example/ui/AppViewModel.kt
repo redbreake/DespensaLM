@@ -228,7 +228,8 @@ class AppViewModel(
             val itemsRequest = cart.map {
                 SaleItemRequest(
                     productoId = it.key.id,
-                    cantidad = it.value
+                    cantidad = it.value,
+                    precioUnitario = it.key.precio_venta
                 )
             }
 

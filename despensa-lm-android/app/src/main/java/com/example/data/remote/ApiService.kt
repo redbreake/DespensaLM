@@ -87,11 +87,13 @@ data class BasicSuccessResponse(val success: Boolean)
 @JsonClass(generateAdapter = true)
 data class SaleItemRequest(
     @Json(name = "producto_id") val productoId: Int,
-    val cantidad: Int
+    val cantidad: Int,
+    @Json(name = "precio_unitario") val precioUnitario: Double? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class SaleRequest(
+    @Json(name = "operacion_id") val operacionId: String,
     val fecha: String,
     @Json(name = "monto_total") val montoTotal: Double,
     @Json(name = "metodo_pago") val metodoPago: String,
@@ -104,8 +106,10 @@ data class SaleRequest(
 data class SaleResponse(
     val success: Boolean,
     @Json(name = "venta_id") val ventaId: Int?,
+    @Json(name = "operacion_id") val operacionId: String? = null,
     @Json(name = "monto_total") val montoTotal: Double?,
     @Json(name = "nuevo_saldo_cliente") val nuevoSaldoCliente: Double?,
+    val duplicada: Boolean = false,
     val error: String?
 )
 

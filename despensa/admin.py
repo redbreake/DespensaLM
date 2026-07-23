@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Cliente, CuentaCorriente, Producto, VentaDiaria
+from .models import Cliente, CuentaCorriente, Producto, VentaDiaria, VentaItem
 
 
 @admin.register(Producto)
@@ -50,6 +50,20 @@ class CuentaCorrienteAdmin(admin.ModelAdmin):
 
 @admin.register(VentaDiaria)
 class VentaDiariaAdmin(admin.ModelAdmin):
-    list_display = ('fecha', 'metodo_pago', 'monto_total', 'notas')
+    list_display = ('fecha', 'metodo_pago', 'cliente', 'monto_total', 'operacion_id', 'notas')
     list_filter = ('fecha', 'metodo_pago')
+    search_fields = ('operacion_id', 'cliente__nombre', 'notas', 'items__nombre_producto')
+    readonly_fields = ('operacion_id',)
     date_hierarchy = 'fecha'
+
+    class VentaItemInline(admin.TabularInline):
+        model = VentaItem
+        extra = 0
+        can_delete = False
+        fields = ('producto', 'nombre_producto', 'cantidad', 'precio_unitario', 'subtotal')
+        readonly_fields = fields
+
+        def has_add_permission(self, request, obj=None):
+            return False
+
+    inlines = (VentaItemInline,)

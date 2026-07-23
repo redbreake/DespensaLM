@@ -18,15 +18,32 @@ class NetworkService(context: Context) {
     fun getSavedBaseUrl(): String {
         val saved = prefs.getString("base_url", "https://despensalm.pythonanywhere.com/") ?: "https://despensalm.pythonanywhere.com/"
         if (saved.contains("ais-pre-") || saved.contains("ais-dev-") || saved.contains("127.0.0.1") || saved.contains("localhost")) {
-            return "https://despensalm.pythonanywhere.com/"
+            return if (saved.contains("127.0.0.1") || saved.contains("localhost")) {
+                normalizeBaseUrl(saved)
+            } else {
+                "https://despensalm.pythonanywhere.com/"
+            }
         }
-        return saved
+        return normalizeBaseUrl(saved)
     }
 
     fun saveBaseUrl(url: String) {
-        val sanitized = if (url.endsWith("/")) url else "$url/"
+        val sanitized = normalizeBaseUrl(url)
+        if (sanitized != getSavedBaseUrl()) {
+            cookieJar.clearCookies()
+        }
         prefs.edit().putString("base_url", sanitized).apply()
         rebuildRetrofit(sanitized)
+    }
+
+    private fun normalizeBaseUrl(url: String): String {
+        var normalized = url.trim()
+        if (!normalized.endsWith("/")) normalized += "/"
+        val isLocal = normalized.contains("127.0.0.1") || normalized.contains("localhost")
+        if (!isLocal && normalized.startsWith("http://", ignoreCase = true)) {
+            normalized = "https://" + normalized.substringAfter("://")
+        }
+        return normalized
     }
 
     private val moshi = Moshi.Builder()
