@@ -7,10 +7,15 @@
 
   const cartItems = document.querySelector('[data-cart-items]');
   const totalNode = document.querySelector('[data-total]');
-  const countNode = document.querySelector('[data-cart-count]');
+  const countNodes = document.querySelectorAll('[data-cart-count]');
+  const mobileTotalNode = document.querySelector('[data-mobile-total]');
   const whatsappButton = document.querySelector('[data-whatsapp]');
   const clearButton = document.querySelector('[data-clear]');
   const searchInput = document.querySelector('[data-search]');
+  const cartPanel = document.querySelector('[data-cart]');
+  const cartToggles = document.querySelectorAll('[data-cart-toggle]');
+  const cartCloseButtons = document.querySelectorAll('[data-cart-close]');
+  const mobileViewport = window.matchMedia('(max-width: 820px)');
 
   const readCart = () => JSON.parse(localStorage.getItem(storageKey) || '[]');
   const writeCart = (cart) => localStorage.setItem(storageKey, JSON.stringify(cart));
@@ -45,9 +50,48 @@
     });
 
     totalNode.textContent = formatter.format(total);
-    countNode.textContent = count;
+    countNodes.forEach((node) => {
+      node.textContent = count;
+    });
+    if (mobileTotalNode) {
+      mobileTotalNode.textContent = formatter.format(total);
+    }
     whatsappButton.disabled = !cart.length;
   }
+
+  function setCartOpen(open) {
+    const shouldOpen = open && mobileViewport.matches;
+    document.body.classList.toggle('cart-open', shouldOpen);
+    cartPanel.setAttribute('aria-hidden', String(mobileViewport.matches && !shouldOpen));
+    cartToggles.forEach((button) => {
+      button.setAttribute('aria-expanded', String(shouldOpen));
+    });
+
+    if (shouldOpen) {
+      const closeButton = cartPanel.querySelector('[data-cart-close]');
+      if (closeButton) closeButton.focus();
+    }
+  }
+
+  cartToggles.forEach((button) => {
+    button.addEventListener('click', () => {
+      if (mobileViewport.matches) {
+        setCartOpen(!document.body.classList.contains('cart-open'));
+      } else {
+        cartPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  cartCloseButtons.forEach((button) => {
+    button.addEventListener('click', () => setCartOpen(false));
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setCartOpen(false);
+  });
+
+  mobileViewport.addEventListener('change', () => setCartOpen(false));
 
   function updateQuantity(id, delta) {
     const cart = readCart()
@@ -124,4 +168,5 @@
   });
 
   renderCart();
+  setCartOpen(false);
 })();

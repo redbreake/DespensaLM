@@ -61,6 +61,14 @@ class CatalogoTests(TestCase):
 
         self.assertContains(response, reverse('despensa:login'))
 
+    def test_catalogo_incluye_acceso_movil_persistente_al_carrito(self):
+        response = self.client.get(reverse('despensa:catalogo'))
+        html = response.content.decode('utf-8')
+
+        self.assertContains(response, 'class="mobile-cart-bar"')
+        self.assertContains(response, 'id="cart-panel"')
+        self.assertEqual(html.count('aria-controls="cart-panel"'), 2)
+
 
 class GestionTests(TestCase):
     def test_gestion_requiere_login_y_luego_muestra_panel(self):

@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Despensa LM</title>
-  <link rel="stylesheet" href="{% static 'despensa/css/catalogo.css' %}?v=20260518-2">
+  <link rel="stylesheet" href="{% static 'despensa/css/catalogo.css' %}?v=20260728-1">
 </head>
 <body>
   <header class="topbar">
@@ -23,7 +23,7 @@
       {% else %}
         <a class="login-link" href="{% url 'despensa:login' %}">Ingresar</a>
       {% endif %}
-      <button class="cart-toggle" type="button" data-cart-toggle aria-label="Ver carrito">
+      <button class="cart-toggle" type="button" data-cart-toggle aria-label="Ver carrito" aria-controls="cart-panel" aria-expanded="false">
         Carrito <span data-cart-count>0</span>
       </button>
     </nav>
@@ -64,10 +64,13 @@
       </div>
     </section>
 
-    <aside class="cart" data-cart aria-label="Carrito de pedido">
+    <aside class="cart" id="cart-panel" data-cart aria-label="Carrito de pedido">
       <div class="cart-header">
         <h2>Pedido</h2>
-        <button type="button" data-clear>Vaciar</button>
+        <div class="cart-header-actions">
+          <button type="button" data-clear>Vaciar</button>
+          <button class="cart-close" type="button" data-cart-close aria-label="Cerrar carrito" title="Cerrar carrito">&times;</button>
+        </div>
       </div>
       <div class="cart-items" data-cart-items></div>
       <div class="cart-footer">
@@ -77,6 +80,13 @@
     </aside>
   </main>
 
-  <script src="{% static 'despensa/js/catalogo.js' %}?v=20260518-2"></script>
+  <button class="cart-backdrop" type="button" data-cart-close aria-label="Cerrar carrito"></button>
+  <button class="mobile-cart-bar" type="button" data-cart-toggle aria-controls="cart-panel" aria-expanded="false">
+    <span class="mobile-cart-summary"><strong data-cart-count>0</strong> productos</span>
+    <span class="mobile-cart-total" data-mobile-total>$0.00</span>
+    <span class="mobile-cart-command">Ver pedido</span>
+  </button>
+
+  <script src="{% static 'despensa/js/catalogo.js' %}?v=20260728-1"></script>
 </body>
 </html>
