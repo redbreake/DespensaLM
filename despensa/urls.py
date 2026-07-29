@@ -11,6 +11,7 @@ urlpatterns = [
     path('salir/', auth_views.LogoutView.as_view(next_page='despensa:catalogo'), name='logout'),
     path('gestion/', views.gestion_dashboard, name='gestion_dashboard'),
     path('gestion/productos/', views.producto_lista, name='producto_lista'),
+    path('gestion/productos/cargar-boleta/', views.boleta_carga, name='boleta_carga'),
     path('gestion/productos/nuevo/', views.producto_formulario, name='producto_nuevo'),
     path('gestion/productos/<int:pk>/editar/', views.producto_formulario, name='producto_editar'),
     path('gestion/productos/<int:pk>/eliminar/', views.producto_eliminar, name='producto_eliminar'),

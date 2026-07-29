@@ -83,6 +83,95 @@ class GestionTests(TestCase):
         self.assertContains(response, 'Panel de gestion')
 
 
+class CargaBoletaTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='operador', password='clave-test')
+        self.client.force_login(self.user)
+
+    def test_carga_crea_productos_y_suma_stock_a_existentes(self):
+        existente = Producto.objects.create(
+            nombre='Mayonesa Natura Doypack 125 g',
+            precio_costo=Decimal('700.00'),
+            precio_venta=Decimal('900.00'),
+            stock_actual=4,
+            activo_en_catalogo=False,
+        )
+        items = [
+            {
+                'nombre': 'mayonesa natura doypack 125 g',
+                'cantidad': 20,
+                'precio_costo': '744.92',
+                'precio_venta': '1000.00',
+            },
+            {
+                'nombre': 'Detergente Cristal Limón 750 cc',
+                'cantidad': 6,
+                'precio_costo': '1174.25',
+                'precio_venta': '1600.00',
+            },
+        ]
+
+        response = self.client.post(
+            reverse('despensa:boleta_carga'),
+            data={'margen': '30', 'items': json.dumps(items)},
+        )
+
+        self.assertRedirects(response, reverse('despensa:producto_lista'))
+        existente.refresh_from_db()
+        self.assertEqual(existente.stock_actual, 24)
+        self.assertEqual(existente.precio_costo, Decimal('744.92'))
+        self.assertEqual(existente.precio_venta, Decimal('1000.00'))
+        self.assertFalse(existente.activo_en_catalogo)
+        nuevo = Producto.objects.get(nombre='Detergente Cristal Limón 750 cc')
+        self.assertEqual(nuevo.stock_actual, 6)
+        self.assertTrue(nuevo.activo_en_catalogo)
+
+    def test_calcula_precio_con_margen_si_la_venta_llega_vacia(self):
+        items = [
+            {
+                'nombre': 'Detergente Cristal Limón 750 cc',
+                'cantidad': 6,
+                'precio_costo': '1174.25',
+                'precio_venta': '',
+            },
+        ]
+
+        response = self.client.post(
+            reverse('despensa:boleta_carga'),
+            data={'margen': '30', 'items': json.dumps(items)},
+        )
+
+        self.assertRedirects(response, reverse('despensa:producto_lista'))
+        producto = Producto.objects.get(nombre='Detergente Cristal Limón 750 cc')
+        self.assertEqual(producto.precio_venta, Decimal('1600.00'))
+
+    def test_rechaza_filas_repetidas_sin_modificar_inventario(self):
+        items = [
+            {
+                'nombre': 'Yerba',
+                'cantidad': 2,
+                'precio_costo': '1000',
+                'precio_venta': '1300',
+            },
+            {
+                'nombre': 'yerba',
+                'cantidad': 3,
+                'precio_costo': '1000',
+                'precio_venta': '1300',
+            },
+        ]
+
+        response = self.client.post(
+            reverse('despensa:boleta_carga'),
+            data={'margen': '30', 'items': json.dumps(items)},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, 'el producto está repetido', status_code=400)
+        self.assertFalse(Producto.objects.exists())
+
+
 class ApiAppTests(TestCase):
     def setUp(self):
         user_model = get_user_model()

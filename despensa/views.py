@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from uuid import UUID
 
 from django.conf import settings
@@ -22,6 +22,8 @@ from .models import Cliente, CuentaCorriente, Producto, VentaDiaria, VentaItem
 
 logger = logging.getLogger(__name__)
 CENT = Decimal('0.01')
+PRECIO_REDONDEO = Decimal('100')
+MAX_PRODUCTOS_BOLETA = 100
 
 
 
@@ -71,6 +73,136 @@ def producto_lista(request):
     if query:
         productos = productos.filter(Q(nombre__icontains=query) | Q(codigo_barras__icontains=query))
     return render(request, 'despensa/gestion/producto_lista.html', {'productos': productos, 'query': query})
+
+
+def _precio_con_margen(precio_costo, margen):
+    precio = precio_costo * (Decimal('1') + margen / Decimal('100'))
+    return (
+        (precio / PRECIO_REDONDEO).to_integral_value(rounding=ROUND_CEILING)
+        * PRECIO_REDONDEO
+    ).quantize(CENT)
+
+
+@login_required
+def boleta_carga(request):
+    items_iniciales = []
+
+    if request.method == 'POST':
+        try:
+            items_iniciales = json.loads(request.POST.get('items', '[]'))
+            margen = Decimal(request.POST.get('margen', '30'))
+        except (json.JSONDecodeError, InvalidOperation, TypeError):
+            messages.error(request, 'La información de la boleta no es válida.')
+        else:
+            errores = []
+            items_limpios = []
+            nombres_vistos = set()
+
+            if not isinstance(items_iniciales, list) or not items_iniciales:
+                errores.append('Agregá al menos un producto.')
+            elif len(items_iniciales) > MAX_PRODUCTOS_BOLETA:
+                errores.append(f'La boleta no puede superar {MAX_PRODUCTOS_BOLETA} productos.')
+
+            if margen < 0 or margen > 500:
+                errores.append('El margen debe estar entre 0 y 500 %.')
+
+            if not errores:
+                for posicion, item in enumerate(items_iniciales, start=1):
+                    try:
+                        nombre = str(item.get('nombre', '')).strip()
+                        cantidad = int(item.get('cantidad', 0))
+                        precio_costo = Decimal(str(item.get('precio_costo', '0'))).quantize(CENT)
+                        precio_venta_raw = item.get('precio_venta')
+                        precio_venta = (
+                            Decimal(str(precio_venta_raw)).quantize(CENT)
+                            if precio_venta_raw not in (None, '')
+                            else _precio_con_margen(precio_costo, margen)
+                        )
+                    except (AttributeError, InvalidOperation, TypeError, ValueError):
+                        errores.append(f'Fila {posicion}: revisá cantidad y precios.')
+                        continue
+
+                    nombre_clave = nombre.casefold()
+                    if not nombre:
+                        errores.append(f'Fila {posicion}: falta el nombre.')
+                    elif nombre_clave in nombres_vistos:
+                        errores.append(f'Fila {posicion}: el producto está repetido.')
+                    elif cantidad <= 0:
+                        errores.append(f'Fila {posicion}: la cantidad debe ser mayor que cero.')
+                    elif precio_costo < 0 or precio_venta < 0:
+                        errores.append(f'Fila {posicion}: los precios no pueden ser negativos.')
+                    else:
+                        nombres_vistos.add(nombre_clave)
+                        items_limpios.append(
+                            {
+                                'nombre': nombre,
+                                'cantidad': cantidad,
+                                'precio_costo': precio_costo,
+                                'precio_venta': precio_venta,
+                            }
+                        )
+
+            if errores:
+                for error in errores:
+                    messages.error(request, error)
+            else:
+                creados = 0
+                actualizados = 0
+                unidades = 0
+
+                with transaction.atomic():
+                    for item in items_limpios:
+                        producto = (
+                            Producto.objects.select_for_update()
+                            .filter(nombre__iexact=item['nombre'])
+                            .first()
+                        )
+                        if producto:
+                            producto.stock_actual += item['cantidad']
+                            producto.precio_costo = item['precio_costo']
+                            producto.precio_venta = item['precio_venta']
+                            producto.save(
+                                update_fields=(
+                                    'stock_actual',
+                                    'precio_costo',
+                                    'precio_venta',
+                                    'actualizado',
+                                )
+                            )
+                            actualizados += 1
+                        else:
+                            Producto.objects.create(
+                                nombre=item['nombre'],
+                                precio_costo=item['precio_costo'],
+                                precio_venta=item['precio_venta'],
+                                stock_actual=item['cantidad'],
+                                stock_minimo=5,
+                                activo_en_catalogo=True,
+                            )
+                            creados += 1
+                        unidades += item['cantidad']
+
+                messages.success(
+                    request,
+                    (
+                        f'Boleta cargada: {unidades} unidades, '
+                        f'{creados} productos nuevos y {actualizados} actualizados.'
+                    ),
+                )
+                return redirect('despensa:producto_lista')
+
+    return render(
+        request,
+        'despensa/gestion/boleta_carga.html',
+        {
+            'productos_existentes': list(
+                Producto.objects.order_by('nombre').values_list('nombre', flat=True)
+            ),
+            'items_iniciales': items_iniciales if isinstance(items_iniciales, list) else [],
+            'margen_inicial': request.POST.get('margen', '30'),
+        },
+        status=400 if request.method == 'POST' else 200,
+    )
 
 
 @login_required
