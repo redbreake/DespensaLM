@@ -1,19 +1,29 @@
 import json
+import logging
+from datetime import date
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
+from uuid import UUID
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt
-from decimal import Decimal
 from django.utils import timezone
 
 from .forms import ClienteForm, CuentaCorrienteForm, ProductoForm, VentaDiariaForm
-from .models import Cliente, CuentaCorriente, Producto, VentaDiaria
+from .models import Cliente, CuentaCorriente, Producto, VentaDiaria, VentaItem
+
+
+logger = logging.getLogger(__name__)
+CENT = Decimal('0.01')
+PRECIO_REDONDEO = Decimal('100')
+MAX_PRODUCTOS_BOLETA = 100
 
 
 
@@ -63,6 +73,136 @@ def producto_lista(request):
     if query:
         productos = productos.filter(Q(nombre__icontains=query) | Q(codigo_barras__icontains=query))
     return render(request, 'despensa/gestion/producto_lista.html', {'productos': productos, 'query': query})
+
+
+def _precio_con_margen(precio_costo, margen):
+    precio = precio_costo * (Decimal('1') + margen / Decimal('100'))
+    return (
+        (precio / PRECIO_REDONDEO).to_integral_value(rounding=ROUND_CEILING)
+        * PRECIO_REDONDEO
+    ).quantize(CENT)
+
+
+@login_required
+def boleta_carga(request):
+    items_iniciales = []
+
+    if request.method == 'POST':
+        try:
+            items_iniciales = json.loads(request.POST.get('items', '[]'))
+            margen = Decimal(request.POST.get('margen', '30'))
+        except (json.JSONDecodeError, InvalidOperation, TypeError):
+            messages.error(request, 'La información de la boleta no es válida.')
+        else:
+            errores = []
+            items_limpios = []
+            nombres_vistos = set()
+
+            if not isinstance(items_iniciales, list) or not items_iniciales:
+                errores.append('Agregá al menos un producto.')
+            elif len(items_iniciales) > MAX_PRODUCTOS_BOLETA:
+                errores.append(f'La boleta no puede superar {MAX_PRODUCTOS_BOLETA} productos.')
+
+            if margen < 0 or margen > 500:
+                errores.append('El margen debe estar entre 0 y 500 %.')
+
+            if not errores:
+                for posicion, item in enumerate(items_iniciales, start=1):
+                    try:
+                        nombre = str(item.get('nombre', '')).strip()
+                        cantidad = int(item.get('cantidad', 0))
+                        precio_costo = Decimal(str(item.get('precio_costo', '0'))).quantize(CENT)
+                        precio_venta_raw = item.get('precio_venta')
+                        precio_venta = (
+                            Decimal(str(precio_venta_raw)).quantize(CENT)
+                            if precio_venta_raw not in (None, '')
+                            else _precio_con_margen(precio_costo, margen)
+                        )
+                    except (AttributeError, InvalidOperation, TypeError, ValueError):
+                        errores.append(f'Fila {posicion}: revisá cantidad y precios.')
+                        continue
+
+                    nombre_clave = nombre.casefold()
+                    if not nombre:
+                        errores.append(f'Fila {posicion}: falta el nombre.')
+                    elif nombre_clave in nombres_vistos:
+                        errores.append(f'Fila {posicion}: el producto está repetido.')
+                    elif cantidad <= 0:
+                        errores.append(f'Fila {posicion}: la cantidad debe ser mayor que cero.')
+                    elif precio_costo < 0 or precio_venta < 0:
+                        errores.append(f'Fila {posicion}: los precios no pueden ser negativos.')
+                    else:
+                        nombres_vistos.add(nombre_clave)
+                        items_limpios.append(
+                            {
+                                'nombre': nombre,
+                                'cantidad': cantidad,
+                                'precio_costo': precio_costo,
+                                'precio_venta': precio_venta,
+                            }
+                        )
+
+            if errores:
+                for error in errores:
+                    messages.error(request, error)
+            else:
+                creados = 0
+                actualizados = 0
+                unidades = 0
+
+                with transaction.atomic():
+                    for item in items_limpios:
+                        producto = (
+                            Producto.objects.select_for_update()
+                            .filter(nombre__iexact=item['nombre'])
+                            .first()
+                        )
+                        if producto:
+                            producto.stock_actual += item['cantidad']
+                            producto.precio_costo = item['precio_costo']
+                            producto.precio_venta = item['precio_venta']
+                            producto.save(
+                                update_fields=(
+                                    'stock_actual',
+                                    'precio_costo',
+                                    'precio_venta',
+                                    'actualizado',
+                                )
+                            )
+                            actualizados += 1
+                        else:
+                            Producto.objects.create(
+                                nombre=item['nombre'],
+                                precio_costo=item['precio_costo'],
+                                precio_venta=item['precio_venta'],
+                                stock_actual=item['cantidad'],
+                                stock_minimo=5,
+                                activo_en_catalogo=True,
+                            )
+                            creados += 1
+                        unidades += item['cantidad']
+
+                messages.success(
+                    request,
+                    (
+                        f'Boleta cargada: {unidades} unidades, '
+                        f'{creados} productos nuevos y {actualizados} actualizados.'
+                    ),
+                )
+                return redirect('despensa:producto_lista')
+
+    return render(
+        request,
+        'despensa/gestion/boleta_carga.html',
+        {
+            'productos_existentes': list(
+                Producto.objects.order_by('nombre').values_list('nombre', flat=True)
+            ),
+            'items_iniciales': items_iniciales if isinstance(items_iniciales, list) else [],
+            'margen_inicial': request.POST.get('margen', '30'),
+        },
+        status=400 if request.method == 'POST' else 200,
+    )
 
 
 @login_required
@@ -395,43 +535,141 @@ def api_producto_guardar(request, pk=None):
 
 
 @api_login_required
+def api_producto_eliminar(request, pk):
+    if request.method != 'DELETE':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    producto = get_object_or_404(Producto, pk=pk)
+    producto.delete()
+    return JsonResponse({'success': True})
+
+
+def _cliente_data(cliente):
+    return {
+        'id': cliente.id,
+        'nombre': cliente.nombre,
+        'telefono': cliente.telefono,
+        'notas': cliente.notas,
+        'saldo_actual': f'{cliente.saldo_total():.2f}',
+    }
+
+
+@api_login_required
 def api_cliente_lista(request):
-    clientes = Cliente.objects.all()
-    data = []
-    for cli in clientes:
-        data.append({
-            'id': cli.id,
-            'nombre': cli.nombre,
-            'telefono': cli.telefono,
-            'saldo_actual': str(cli.saldo_total())
+    return JsonResponse([_cliente_data(cliente) for cliente in Cliente.objects.all()], safe=False)
+
+
+@api_login_required
+def api_cliente_guardar(request, pk=None):
+    if request.method not in ['POST', 'PUT']:
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    nombre = str(data.get('nombre', '')).strip()
+    if not nombre:
+        return JsonResponse({'error': 'El nombre es obligatorio'}, status=400)
+
+    cliente = get_object_or_404(Cliente, pk=pk) if pk else Cliente()
+    cliente.nombre = nombre
+    cliente.telefono = str(data.get('telefono', '')).strip()
+    if 'notas' in data:
+        cliente.notas = str(data.get('notas') or '').strip()
+    cliente.save()
+    return JsonResponse(_cliente_data(cliente), status=200 if pk else 201)
+
+
+@api_login_required
+def api_cliente_movimientos(request, pk):
+    cliente = get_object_or_404(Cliente, pk=pk)
+
+    if request.method == 'GET':
+        movimientos = [
+            {
+                'id': movimiento.id,
+                'fecha': timezone.localtime(movimiento.fecha).isoformat(),
+                'tipo_movimiento': movimiento.tipo_movimiento,
+                'monto': str(movimiento.monto),
+                'descripcion': movimiento.descripcion,
+            }
+            for movimiento in cliente.movimientos.all()
+        ]
+        return JsonResponse({
+            'cliente': _cliente_data(cliente),
+            'movimientos': movimientos,
         })
-    return JsonResponse(data, safe=False)
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        monto = Decimal(str(data.get('monto')))
+    except (json.JSONDecodeError, TypeError, ValueError, ArithmeticError):
+        return JsonResponse({'error': 'El monto no es válido'}, status=400)
+
+    tipo = data.get('tipo_movimiento')
+    if tipo not in dict(CuentaCorriente.TipoMovimiento.choices):
+        return JsonResponse({'error': 'Tipo de movimiento inválido'}, status=400)
+    if monto <= 0:
+        return JsonResponse({'error': 'El monto debe ser mayor que cero'}, status=400)
+
+    movimiento = CuentaCorriente.objects.create(
+        cliente=cliente,
+        tipo_movimiento=tipo,
+        monto=monto,
+        descripcion=str(data.get('descripcion', '')).strip(),
+    )
+    return JsonResponse({
+        'id': movimiento.id,
+        'saldo_actual': f'{cliente.saldo_total():.2f}',
+    }, status=201)
 
 
 @api_login_required
 def api_venta_crear(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
-    
+
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, TypeError):
         return JsonResponse({'error': 'JSON inválido'}, status=400)
-    
-    monto_total = data.get('monto_total')
+
+    operacion_id = None
+    operacion_id_raw = data.get('operacion_id')
+    if operacion_id_raw:
+        try:
+            operacion_id = UUID(str(operacion_id_raw))
+        except (TypeError, ValueError, AttributeError):
+            return JsonResponse({'error': 'Identificador de operación inválido'}, status=400)
+
+        venta_existente = VentaDiaria.objects.filter(operacion_id=operacion_id).first()
+        if venta_existente:
+            return _venta_response(venta_existente, duplicada=True)
+
+    fecha_raw = data.get('fecha')
+    try:
+        fecha_operacion = date.fromisoformat(str(fecha_raw))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'La fecha debe usar el formato AAAA-MM-DD'}, status=400)
+
     metodo_pago = data.get('metodo_pago')
-    notas = data.get('notas', '').strip()
+    notas = str(data.get('notas') or '').strip()
     cliente_id = data.get('cliente_id')
     items = data.get('items', [])
-    
-    if not monto_total or not metodo_pago:
-        return JsonResponse({'error': 'Monto total y método de pago son requeridos'}, status=400)
-        
+
+    if not metodo_pago:
+        return JsonResponse({'error': 'El método de pago es obligatorio'}, status=400)
     if metodo_pago not in dict(VentaDiaria.MetodoPago.choices):
         return JsonResponse({'error': 'Método de pago inválido'}, status=400)
-        
     if metodo_pago == 'FIADO' and not cliente_id:
         return JsonResponse({'error': 'Se requiere un cliente para compras fiadas'}, status=400)
+    if not isinstance(items, list) or not items:
+        return JsonResponse({'error': 'La venta debe incluir al menos un producto'}, status=400)
 
     cliente = None
     if cliente_id:
@@ -440,42 +678,146 @@ def api_venta_crear(request):
         except Cliente.DoesNotExist:
             return JsonResponse({'error': 'Cliente no encontrado'}, status=404)
 
+    cantidades = {}
+    precios = {}
+    usa_precios_snapshot = True
+    for item in items:
+        if not isinstance(item, dict):
+            return JsonResponse({'error': 'Formato de producto inválido'}, status=400)
+        try:
+            producto_id = int(item.get('producto_id'))
+            cantidad = int(item.get('cantidad'))
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Producto o cantidad inválidos'}, status=400)
+        if cantidad <= 0:
+            return JsonResponse({'error': 'Las cantidades deben ser mayores que cero'}, status=400)
+
+        precio_raw = item.get('precio_unitario')
+        if precio_raw is None:
+            usa_precios_snapshot = False
+        else:
+            try:
+                precio = Decimal(str(precio_raw)).quantize(CENT)
+            except (InvalidOperation, TypeError, ValueError):
+                return JsonResponse({'error': 'Precio unitario inválido'}, status=400)
+            if precio < 0:
+                return JsonResponse({'error': 'El precio unitario no puede ser negativo'}, status=400)
+            if producto_id in precios and precios[producto_id] != precio:
+                return JsonResponse({'error': 'Un producto no puede tener dos precios en la misma venta'}, status=400)
+            precios[producto_id] = precio
+
+        cantidades[producto_id] = cantidades.get(producto_id, 0) + cantidad
+
+    try:
+        monto_declarado = Decimal(str(data.get('monto_total'))).quantize(CENT)
+    except (InvalidOperation, TypeError, ValueError):
+        return JsonResponse({'error': 'Monto total inválido'}, status=400)
+
     try:
         with transaction.atomic():
+            if operacion_id:
+                venta_existente = VentaDiaria.objects.select_for_update().filter(
+                    operacion_id=operacion_id
+                ).first()
+                if venta_existente:
+                    return _venta_response(venta_existente, duplicada=True)
+
+            productos = {
+                producto.id: producto
+                for producto in Producto.objects.select_for_update().filter(pk__in=cantidades)
+            }
+            faltantes = sorted(set(cantidades) - set(productos))
+            if faltantes:
+                return JsonResponse(
+                    {'error': 'Uno de los productos provistos no existe', 'productos': faltantes},
+                    status=400,
+                )
+
+            items_preparados = []
+            monto_calculado = Decimal('0.00')
+            for producto_id, cantidad in cantidades.items():
+                producto = productos[producto_id]
+                if producto.stock_actual < cantidad:
+                    return JsonResponse(
+                        {
+                            'error': f'Stock insuficiente para {producto.nombre}',
+                            'producto_id': producto.id,
+                            'stock_disponible': producto.stock_actual,
+                        },
+                        status=409,
+                    )
+
+                precio_unitario = precios.get(producto_id, producto.precio_venta).quantize(CENT)
+                subtotal = (precio_unitario * cantidad).quantize(CENT)
+                monto_calculado += subtotal
+                items_preparados.append((producto, cantidad, precio_unitario, subtotal))
+
+            monto_calculado = monto_calculado.quantize(CENT)
+            if monto_calculado <= 0:
+                return JsonResponse({'error': 'El total calculado debe ser mayor que cero'}, status=400)
+            if usa_precios_snapshot and monto_declarado != monto_calculado:
+                return JsonResponse(
+                    {
+                        'error': 'El total enviado no coincide con los productos',
+                        'monto_calculado': str(monto_calculado),
+                    },
+                    status=409,
+                )
+
             venta = VentaDiaria.objects.create(
-                monto_total=Decimal(str(monto_total)),
+                fecha=fecha_operacion,
+                operacion_id=operacion_id,
+                cliente=cliente,
+                monto_total=monto_calculado,
                 metodo_pago=metodo_pago,
-                notas=notas or 'Venta desde App Móvil'
+                notas=notas or 'Venta desde App Móvil',
             )
-            
+
+            VentaItem.objects.bulk_create([
+                VentaItem(
+                    venta=venta,
+                    producto=producto,
+                    nombre_producto=producto.nombre,
+                    cantidad=cantidad,
+                    precio_unitario=precio_unitario,
+                    subtotal=subtotal,
+                )
+                for producto, cantidad, precio_unitario, subtotal in items_preparados
+            ])
+
             if metodo_pago == 'FIADO' and cliente:
                 CuentaCorriente.objects.create(
                     cliente=cliente,
                     tipo_movimiento=CuentaCorriente.TipoMovimiento.DEUDA,
-                    monto=Decimal(str(monto_total)),
-                    descripcion=notas or 'Compra fiada (App Móvil)'
+                    monto=monto_calculado,
+                    descripcion=notas or 'Compra fiada (App Móvil)',
                 )
-                
-            for item in items:
-                prod_id = item.get('producto_id')
-                cant = int(item.get('cantidad', 0))
-                if prod_id and cant > 0:
-                    producto = Producto.objects.select_for_update().get(pk=prod_id)
-                    producto.stock_actual = max(0, producto.stock_actual - cant)
-                    producto.save()
-                    
-            response_data = {
-                'success': True,
-                'venta_id': venta.id,
-                'monto_total': str(venta.monto_total)
-            }
-            if cliente:
-                response_data['nuevo_saldo_cliente'] = str(cliente.saldo_total())
-                
-            return JsonResponse(response_data, status=201)
-            
-    except Producto.DoesNotExist:
-        return JsonResponse({'error': 'Uno de los productos provistos no existe'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': f'Error al procesar la venta: {str(e)}'}, status=500)
 
+            for producto, cantidad, _, _ in items_preparados:
+                producto.stock_actual -= cantidad
+                producto.save(update_fields=['stock_actual', 'actualizado'])
+
+            return _venta_response(venta, creada=True)
+    except IntegrityError:
+        if operacion_id:
+            venta_existente = VentaDiaria.objects.filter(operacion_id=operacion_id).first()
+            if venta_existente:
+                return _venta_response(venta_existente, duplicada=True)
+        logger.exception('Error de integridad al registrar una venta')
+        return JsonResponse({'error': 'No se pudo registrar la venta'}, status=409)
+    except Exception:
+        logger.exception('Error inesperado al procesar una venta')
+        return JsonResponse({'error': 'Error interno al procesar la venta'}, status=500)
+
+
+def _venta_response(venta, creada=False, duplicada=False):
+    response_data = {
+        'success': True,
+        'venta_id': venta.id,
+        'operacion_id': str(venta.operacion_id) if venta.operacion_id else None,
+        'monto_total': str(venta.monto_total),
+        'duplicada': duplicada,
+    }
+    if venta.cliente_id:
+        response_data['nuevo_saldo_cliente'] = str(venta.cliente.saldo_total())
+    return JsonResponse(response_data, status=201 if creada else 200)

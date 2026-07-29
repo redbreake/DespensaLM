@@ -1,0 +1,99 @@
+{% extends 'despensa/gestion/base.html' %}
+{% load static %}
+
+{% block title %}Cargar boleta - Despensa LM{% endblock %}
+
+{% block content %}
+  <header class="page-header receipt-page-header">
+    <div>
+      <p class="eyebrow">Ingreso de mercadería</p>
+      <h1>Cargar boleta</h1>
+    </div>
+    <a class="secondary-button" href="{% url 'despensa:producto_lista' %}">Cancelar</a>
+  </header>
+
+  <form id="receipt-form" method="post" class="receipt-form">
+    {% csrf_token %}
+    <input type="hidden" name="items" id="receipt-items">
+
+    <section class="receipt-photo-column" aria-labelledby="receipt-photo-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Referencia</p>
+          <h2 id="receipt-photo-title">Foto de la boleta</h2>
+        </div>
+        <label class="secondary-button file-button" for="receipt-photo">Elegir foto</label>
+        <input id="receipt-photo" class="visually-hidden" type="file" accept="image/*" capture="environment">
+      </div>
+      <div class="receipt-photo-stage" id="receipt-photo-stage">
+        <div class="receipt-photo-empty" id="receipt-photo-empty">
+          <strong>Sin foto seleccionada</strong>
+          <span>La imagen se usa sólo en este dispositivo.</span>
+        </div>
+        <img id="receipt-photo-preview" alt="Vista previa de la boleta">
+      </div>
+    </section>
+
+    <section class="receipt-items-column" aria-labelledby="receipt-items-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Productos</p>
+          <h2 id="receipt-items-title">Detalle de la compra</h2>
+        </div>
+        <div class="margin-control">
+          <label for="receipt-margin">Margen</label>
+          <div>
+            <input id="receipt-margin" name="margen" type="number" min="0" max="500" step="1" value="{{ margen_inicial }}">
+            <span>%</span>
+          </div>
+        </div>
+      </div>
+
+      <datalist id="existing-products">
+        {% for nombre in productos_existentes %}
+          <option value="{{ nombre }}"></option>
+        {% endfor %}
+      </datalist>
+
+      <div class="receipt-table-wrap">
+        <table class="receipt-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Costo unitario</th>
+              <th>Venta</th>
+              <th><span class="visually-hidden">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody id="receipt-rows"></tbody>
+        </table>
+      </div>
+
+      <button class="add-row-button" id="add-receipt-row" type="button">+ Agregar producto</button>
+
+      <footer class="receipt-summary">
+        <div>
+          <span>Unidades</span>
+          <strong id="receipt-units">0</strong>
+        </div>
+        <div>
+          <span>Costo total</span>
+          <strong id="receipt-cost-total">$ 0</strong>
+        </div>
+        <div>
+          <span>Venta estimada</span>
+          <strong id="receipt-sale-total">$ 0</strong>
+        </div>
+        <button class="primary-button receipt-submit" type="submit">Confirmar carga</button>
+      </footer>
+    </section>
+  </form>
+
+  {{ items_iniciales|json_script:"receipt-initial-items" }}
+  {{ productos_existentes|json_script:"receipt-existing-products" }}
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'despensa/js/boleta_carga.js' %}?v=20260729-1"></script>
+{% endblock %}

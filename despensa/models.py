@@ -83,6 +83,20 @@ class VentaDiaria(models.Model):
         FIADO = 'FIADO', 'Fiado'
 
     fecha = models.DateField('fecha', default=timezone.localdate)
+    operacion_id = models.UUIDField(
+        'identificador de operación',
+        unique=True,
+        blank=True,
+        null=True,
+        editable=False,
+    )
+    cliente = models.ForeignKey(
+        Cliente,
+        on_delete=models.SET_NULL,
+        related_name='ventas',
+        blank=True,
+        null=True,
+    )
     monto_total = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     metodo_pago = models.CharField(max_length=20, choices=MetodoPago.choices)
     notas = models.CharField(max_length=220, blank=True)
@@ -94,3 +108,34 @@ class VentaDiaria(models.Model):
 
     def __str__(self):
         return f'{self.fecha} - {self.get_metodo_pago_display()} - ${self.monto_total}'
+
+
+class VentaItem(models.Model):
+    venta = models.ForeignKey(VentaDiaria, on_delete=models.CASCADE, related_name='items')
+    producto = models.ForeignKey(
+        Producto,
+        on_delete=models.SET_NULL,
+        related_name='items_vendidos',
+        blank=True,
+        null=True,
+    )
+    nombre_producto = models.CharField(max_length=160)
+    cantidad = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    precio_unitario = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    subtotal = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+
+    class Meta:
+        ordering = ['id']
+        verbose_name = 'artículo de venta'
+        verbose_name_plural = 'artículos de venta'
+
+    def __str__(self):
+        return f'{self.cantidad} x {self.nombre_producto} - ${self.subtotal}'

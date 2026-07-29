@@ -11,6 +11,7 @@ urlpatterns = [
     path('salir/', auth_views.LogoutView.as_view(next_page='despensa:catalogo'), name='logout'),
     path('gestion/', views.gestion_dashboard, name='gestion_dashboard'),
     path('gestion/productos/', views.producto_lista, name='producto_lista'),
+    path('gestion/productos/cargar-boleta/', views.boleta_carga, name='boleta_carga'),
     path('gestion/productos/nuevo/', views.producto_formulario, name='producto_nuevo'),
     path('gestion/productos/<int:pk>/editar/', views.producto_formulario, name='producto_editar'),
     path('gestion/productos/<int:pk>/eliminar/', views.producto_eliminar, name='producto_eliminar'),
@@ -28,7 +29,10 @@ urlpatterns = [
     path('api/productos/', views.api_producto_lista, name='api_producto_lista'),
     path('api/productos/guardar/', views.api_producto_guardar, name='api_producto_crear'),
     path('api/productos/<int:pk>/editar/', views.api_producto_guardar, name='api_producto_editar'),
+    path('api/productos/<int:pk>/eliminar/', views.api_producto_eliminar, name='api_producto_eliminar'),
     path('api/clientes/', views.api_cliente_lista, name='api_cliente_lista'),
+    path('api/clientes/guardar/', views.api_cliente_guardar, name='api_cliente_crear'),
+    path('api/clientes/<int:pk>/editar/', views.api_cliente_guardar, name='api_cliente_editar'),
+    path('api/clientes/<int:pk>/movimientos/', views.api_cliente_movimientos, name='api_cliente_movimientos'),
     path('api/ventas/', views.api_venta_crear, name='api_venta_crear'),
 ]
-

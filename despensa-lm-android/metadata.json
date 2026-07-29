@@ -1,0 +1,6 @@
+{
+  "name": "Despensa LM",
+  "description": "Control de inventario, ventas y cuentas corrientes para Despensa LM.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

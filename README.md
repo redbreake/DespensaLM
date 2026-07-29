@@ -2,6 +2,11 @@
 
 Sistema Django para gestionar inventario, clientes, cuentas corrientes y un catalogo publico con pedidos por WhatsApp.
 
+## Documentación
+
+- [Auditoría web y hoja de ruta](docs/AUDITORIA_WEB_Y_HOJA_DE_RUTA.md)
+- [Bloque 0: integridad y despliegue](docs/BLOQUE_0_INTEGRIDAD_Y_DESPLIEGUE.md)
+
 ## Desarrollo local
 
 ```bash
