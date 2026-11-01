@@ -12,6 +12,10 @@
   const unitsOutput = document.getElementById('receipt-units');
   const costOutput = document.getElementById('receipt-cost-total');
   const saleOutput = document.getElementById('receipt-sale-total');
+  const jsonInput = document.getElementById('receipt-json');
+  const importJsonButton = document.getElementById('import-json');
+  const copyJsonButton = document.getElementById('copy-json-format');
+  const importStatus = document.getElementById('receipt-import-status');
   const initialItems = JSON.parse(document.getElementById('receipt-initial-items').textContent);
   const existingNames = new Set(
     JSON.parse(document.getElementById('receipt-existing-products').textContent)
@@ -23,6 +27,17 @@
     maximumFractionDigits: 2,
   });
   let photoUrl = null;
+  const jsonExample = JSON.stringify({
+    margen: 30,
+    productos: [
+      {
+        nombre: 'Yerba mate 1 kg',
+        cantidad: 6,
+        precio_costo: 3000,
+        precio_venta: 3900,
+      },
+    ],
+  }, null, 2);
 
   function parseNumber(value) {
     const number = Number.parseFloat(value);
@@ -32,6 +47,86 @@
   function salePrice(cost) {
     const margin = Math.max(0, parseNumber(marginInput.value));
     return Math.ceil((cost * (1 + margin / 100)) / 100) * 100;
+  }
+
+  function setImportStatus(message, type = '') {
+    importStatus.textContent = message;
+    importStatus.dataset.type = type;
+  }
+
+  function stripCodeFence(value) {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('```')) return trimmed;
+    return trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+
+  function importedNumber(value, label, optional = false) {
+    if (optional && (value === undefined || value === null || value === '')) return '';
+    const normalized = String(value)
+      .trim()
+      .replace(/\$/g, '')
+      .replace(/\s/g, '')
+      .replace(/\.(?=\d{3}(?:\D|$))/g, '')
+      .replace(',', '.');
+    const number = Number(normalized);
+    if (!Number.isFinite(number) || number < 0) {
+      throw new Error(`${label} no es válido.`);
+    }
+    return number;
+  }
+
+  function parseImportedJson(rawValue) {
+    let payload;
+    try {
+      payload = JSON.parse(stripCodeFence(rawValue));
+    } catch (error) {
+      throw new Error('El texto no es un JSON válido.');
+    }
+
+    const products = Array.isArray(payload) ? payload : payload?.productos ?? payload?.items;
+    const importedMargin = Array.isArray(payload) ? null : payload?.margen;
+    if (!Array.isArray(products) || products.length === 0) {
+      throw new Error('El JSON debe incluir una lista de productos.');
+    }
+    if (products.length > 100) {
+      throw new Error('La boleta no puede superar 100 productos.');
+    }
+
+    let normalizedMargin = null;
+    if (importedMargin !== null && importedMargin !== undefined && importedMargin !== '') {
+      normalizedMargin = importedNumber(importedMargin, 'El margen');
+      if (normalizedMargin > 500) throw new Error('El margen debe estar entre 0 y 500 %.');
+    }
+
+    const names = new Set();
+    const normalizedProducts = products.map((product, index) => {
+      if (!product || typeof product !== 'object' || Array.isArray(product)) {
+        throw new Error(`Producto ${index + 1}: formato inválido.`);
+      }
+      const name = String(product.nombre ?? '').trim();
+      const nameKey = name.toLocaleLowerCase('es-AR');
+      if (!name) throw new Error(`Producto ${index + 1}: falta el nombre.`);
+      if (names.has(nameKey)) throw new Error(`Producto ${index + 1}: el nombre está repetido.`);
+      names.add(nameKey);
+
+      const quantity = importedNumber(product.cantidad, `Producto ${index + 1}: la cantidad`);
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        throw new Error(`Producto ${index + 1}: la cantidad debe ser un entero mayor que cero.`);
+      }
+
+      return {
+        nombre: name,
+        cantidad: quantity,
+        precio_costo: importedNumber(product.precio_costo, `Producto ${index + 1}: el costo`),
+        precio_venta: importedNumber(
+          product.precio_venta,
+          `Producto ${index + 1}: el precio de venta`,
+          true
+        ),
+      };
+    });
+    if (normalizedMargin !== null) marginInput.value = String(normalizedMargin);
+    return normalizedProducts;
   }
 
   function setProductStatus(row) {
@@ -112,7 +207,8 @@
     quantity.value = item.cantidad || '';
     cost.value = item.precio_costo ?? '';
     sale.value = item.precio_venta ?? '';
-    sale.dataset.edited = item.precio_venta ? 'true' : 'false';
+    const hasSalePrice = item.precio_venta !== '' && item.precio_venta !== null && item.precio_venta !== undefined;
+    sale.dataset.edited = hasSalePrice ? 'true' : 'false';
 
     name.addEventListener('input', () => setProductStatus(row));
     quantity.addEventListener('input', updateSummary);
@@ -133,6 +229,29 @@
   addButton.addEventListener('click', () => {
     const row = addRow();
     row.querySelector('[data-field="nombre"]').focus();
+  });
+
+  importJsonButton.addEventListener('click', () => {
+    try {
+      const products = parseImportedJson(jsonInput.value);
+      rowsContainer.replaceChildren();
+      products.forEach(addRow);
+      setImportStatus(`${products.length} productos cargados para revisar.`, 'success');
+    } catch (error) {
+      setImportStatus(error.message, 'error');
+    }
+  });
+
+  copyJsonButton.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(jsonExample);
+      setImportStatus('Formato copiado.', 'success');
+    } catch (error) {
+      jsonInput.value = jsonExample;
+      jsonInput.focus();
+      jsonInput.select();
+      setImportStatus('Formato colocado en el cuadro de texto.', 'success');
+    }
   });
 
   marginInput.addEventListener('input', () => {

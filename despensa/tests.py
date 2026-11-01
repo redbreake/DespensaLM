@@ -127,6 +127,14 @@ class CargaBoletaTests(TestCase):
         self.assertEqual(nuevo.stock_actual, 6)
         self.assertTrue(nuevo.activo_en_catalogo)
 
+    def test_pantalla_incluye_importador_json(self):
+        response = self.client.get(reverse('despensa:boleta_carga'))
+
+        self.assertContains(response, 'Importar texto JSON')
+        self.assertContains(response, 'id="receipt-json"')
+        self.assertContains(response, 'id="import-json"')
+        self.assertContains(response, '"productos"')
+
     def test_calcula_precio_con_margen_si_la_venta_llega_vacia(self):
         items = [
             {

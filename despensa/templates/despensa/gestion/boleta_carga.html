@@ -55,6 +55,24 @@
         {% endfor %}
       </datalist>
 
+      <details class="receipt-import">
+        <summary>Importar texto JSON</summary>
+        <div class="receipt-import-body">
+          <textarea
+            id="receipt-json"
+            rows="9"
+            spellcheck="false"
+            placeholder='{"margen":30,"productos":[{"nombre":"Yerba 1 kg","cantidad":6,"precio_costo":3000}]}'
+            aria-label="Texto JSON de la boleta"
+          ></textarea>
+          <div class="receipt-import-actions">
+            <button class="secondary-button" id="copy-json-format" type="button">Copiar formato</button>
+            <button class="primary-button" id="import-json" type="button">Cargar texto</button>
+          </div>
+          <p class="receipt-import-status" id="receipt-import-status" role="status" aria-live="polite"></p>
+        </div>
+      </details>
+
       <div class="receipt-table-wrap">
         <table class="receipt-table">
           <thead>
@@ -95,5 +113,5 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="{% static 'despensa/js/boleta_carga.js' %}?v=20260729-1"></script>
+  <script src="{% static 'despensa/js/boleta_carga.js' %}?v=20261101-1"></script>
 {% endblock %}

@@ -463,6 +463,66 @@ h2 {
   background: var(--panel);
 }
 
+.receipt-import {
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.receipt-import summary {
+  padding: 13px 14px;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.receipt-import-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.receipt-import textarea {
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  outline: 0;
+  resize: vertical;
+  font-family: Consolas, "Courier New", monospace;
+  line-height: 1.45;
+}
+
+.receipt-import textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.receipt-import-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.receipt-import-status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.receipt-import-status[data-type="success"] {
+  color: #067647;
+}
+
+.receipt-import-status[data-type="error"] {
+  color: var(--danger);
+}
+
 .receipt-table {
   width: 100%;
   border-collapse: collapse;
@@ -822,5 +882,10 @@ h2 {
 
   .receipt-summary span {
     font-size: 0.66rem;
+  }
+
+  .receipt-import-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
   }
 }
