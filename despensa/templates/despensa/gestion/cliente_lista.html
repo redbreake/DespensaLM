@@ -12,14 +12,14 @@
   </header>
 
   <form class="toolbar" method="get">
-    <input type="search" name="q" value="{{ query }}" placeholder="Buscar cliente o telefono">
+    <input type="search" name="q" value="{{ query }}" placeholder="Buscar cliente o teléfono" aria-label="Buscar cliente">
     <button class="secondary-button" type="submit">Buscar</button>
   </form>
 
   <section class="cards-grid">
     {% for cliente in clientes %}
       <a class="client-card" href="{% url 'despensa:cliente_detalle' cliente.pk %}">
-        <span>{{ cliente.telefono|default:'Sin telefono' }}</span>
+        <span>{{ cliente.telefono|default:'Sin teléfono' }}</span>
         <strong>{{ cliente.nombre }}</strong>
         <b>Saldo: ${{ cliente.saldo_total }}</b>
       </a>

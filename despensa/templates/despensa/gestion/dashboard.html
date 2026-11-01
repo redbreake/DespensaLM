@@ -6,11 +6,11 @@
   <header class="page-header">
     <div>
       <p class="eyebrow">Resumen del negocio</p>
-      <h1>Panel de gestion</h1>
+      <h1>Panel de gestión</h1>
     </div>
     <div class="header-actions">
-      <a class="secondary-button" href="{% url 'despensa:cliente_lista' %}">Anotar Fiado 📝</a>
-      <a class="primary-button" href="{% url 'despensa:venta_nueva' %}">Registrar venta 💰</a>
+      <a class="secondary-button" href="{% url 'despensa:cliente_lista' %}">Anotar fiado</a>
+      <a class="primary-button" href="{% url 'despensa:venta_nueva' %}">Registrar venta</a>
     </div>
   </header>
 
@@ -36,7 +36,7 @@
   <section class="two-columns">
     <article class="panel">
       <div class="panel-title">
-        <h2>Ultimos fiados y pagos</h2>
+        <h2>Últimos fiados y pagos</h2>
         <a href="{% url 'despensa:cliente_lista' %}">Ver clientes</a>
       </div>
       <div class="list">
@@ -49,14 +49,14 @@
             <b>${{ movimiento.monto }}</b>
           </div>
         {% empty %}
-          <p class="empty-state">Todavia no hay movimientos.</p>
+          <p class="empty-state">Todavía no hay movimientos.</p>
         {% endfor %}
       </div>
     </article>
 
     <article class="panel">
       <div class="panel-title">
-        <h2>Ultimas ventas</h2>
+        <h2>Últimas ventas</h2>
         <a href="{% url 'despensa:venta_lista' %}">Ver caja</a>
       </div>
       <div class="list">
@@ -69,7 +69,7 @@
             <b>${{ venta.monto_total }}</b>
           </div>
         {% empty %}
-          <p class="empty-state">Todavia no hay ventas registradas.</p>
+          <p class="empty-state">Todavía no hay ventas registradas.</p>
         {% endfor %}
       </div>
     </article>

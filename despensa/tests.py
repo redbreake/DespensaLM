@@ -80,7 +80,8 @@ class GestionTests(TestCase):
         self.client.login(username='admin', password='clave-test')
 
         response = self.client.get(reverse('despensa:gestion_dashboard'))
-        self.assertContains(response, 'Panel de gestion')
+        self.assertContains(response, 'Panel de gestión')
+        self.assertContains(response, 'aria-current="page"')
 
 
 class CargaBoletaTests(TestCase):

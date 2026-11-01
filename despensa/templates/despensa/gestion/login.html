@@ -5,24 +5,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ingresar - Despensa LM</title>
-  <link rel="stylesheet" href="{% static 'despensa/css/gestion.css' %}?v=20260518-2">
+  <link rel="stylesheet" href="{% static 'despensa/css/gestion.css' %}?v=20261101-2">
 </head>
 <body class="login-page">
   <main class="login-card">
-    <p class="eyebrow">Gestion interna</p>
-    <h1>Despensa LM</h1>
+    <div class="login-brand">
+      <img src="{% static 'despensa/img/logo.png' %}" alt="" class="brand-logo">
+      <div><p class="eyebrow">Gestión interna</p><h1>Despensa LM</h1></div>
+    </div>
     <form method="post">
       {% csrf_token %}
       {% if form.errors %}
-        <p class="form-error">Usuario o contrasena incorrectos.</p>
+        <p class="form-error">Usuario o contraseña incorrectos.</p>
       {% endif %}
       <label for="{{ form.username.id_for_label }}">Usuario</label>
       {{ form.username }}
-      <label for="{{ form.password.id_for_label }}">Contrasena</label>
+      <label for="{{ form.password.id_for_label }}">Contraseña</label>
       {{ form.password }}
       <button class="primary-button" type="submit">Ingresar</button>
     </form>
-    <a class="plain-link" href="{% url 'despensa:catalogo' %}">Volver al catalogo</a>
+    <a class="plain-link" href="{% url 'despensa:catalogo' %}">Volver al catálogo</a>
   </main>
 </body>
 </html>

@@ -15,7 +15,7 @@
   </header>
 
   <form class="toolbar" method="get">
-    <input type="search" name="q" value="{{ query }}" placeholder="Buscar por nombre o codigo">
+    <input type="search" name="q" value="{{ query }}" placeholder="Buscar por nombre o código" aria-label="Buscar producto">
     <button class="secondary-button" type="submit">Buscar</button>
   </form>
 
@@ -26,31 +26,31 @@
           <th>Producto</th>
           <th>Venta</th>
           <th>Stock</th>
-          <th>Catalogo</th>
+          <th>Catálogo</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         {% for producto in productos %}
           <tr>
-            <td>
+            <td data-label="Producto">
               <strong>{{ producto.nombre }}</strong>
-              <span>{{ producto.codigo_barras|default:'Sin codigo' }}</span>
+              <span>{{ producto.codigo_barras|default:'Sin código' }}</span>
             </td>
-            <td>${{ producto.precio_venta }}</td>
-            <td>
+            <td data-label="Venta">${{ producto.precio_venta }}</td>
+            <td data-label="Stock">
               {% if producto.bajo_stock %}
                 <span class="badge danger">{{ producto.stock_actual }} bajo</span>
               {% else %}
                 <span class="badge">{{ producto.stock_actual }}</span>
               {% endif %}
             </td>
-            <td>{{ producto.activo_en_catalogo|yesno:'Visible,Oculto' }}</td>
-            <td>
-              <a class="table-link" href="{% url 'despensa:producto_editar' producto.pk %}" style="margin-right: 12px;">Editar</a>
-              <form method="post" action="{% url 'despensa:producto_eliminar' producto.pk %}" style="display: inline;" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este producto?');">
+            <td data-label="Catálogo">{{ producto.activo_en_catalogo|yesno:'Visible,Oculto' }}</td>
+            <td class="table-actions" data-label="Acciones">
+              <a class="table-link" href="{% url 'despensa:producto_editar' producto.pk %}">Editar</a>
+              <form method="post" action="{% url 'despensa:producto_eliminar' producto.pk %}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este producto?');">
                 {% csrf_token %}
-                <button type="submit" style="background: none; border: none; color: var(--danger); cursor: pointer; font-weight: 800; padding: 0;">Eliminar</button>
+                <button class="danger-link" type="submit">Eliminar</button>
               </form>
             </td>
           </tr>

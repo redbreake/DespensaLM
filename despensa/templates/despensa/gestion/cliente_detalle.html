@@ -7,16 +7,16 @@
     <div>
       <p class="eyebrow">Cuenta corriente</p>
       <h1>{{ cliente.nombre }}</h1>
-      <p class="muted">{{ cliente.telefono|default:'Sin telefono' }}</p>
+      <p class="muted">{{ cliente.telefono|default:'Sin teléfono' }}</p>
     </div>
-    <div class="header-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+    <div class="header-actions client-actions">
       {% if whatsapp_url %}
-        <a class="secondary-button" href="{{ whatsapp_url }}" target="_blank" style="background-color: #25D366; color: white; border: none;">
+        <a class="secondary-button whatsapp-button" href="{{ whatsapp_url }}" target="_blank" rel="noopener">
           Enviar por WhatsApp
         </a>
       {% endif %}
-      <button class="secondary-button" onclick="copiarResumen()" id="btn-copiar">
-        Copiar Resumen
+      <button class="secondary-button" type="button" onclick="copiarResumen()" id="btn-copiar">
+        Copiar resumen
       </button>
       <a class="secondary-button" href="{% url 'despensa:cliente_editar' cliente.pk %}">Editar cliente</a>
       <a class="primary-button" href="{% url 'despensa:cliente_lista' %}">Volver</a>
@@ -42,21 +42,21 @@
       </div>
       <div class="list">
         {% for movimiento in movimientos %}
-          <div class="list-row" style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="list-row">
             <div>
               <strong>{{ movimiento.get_tipo_movimiento_display }}</strong>
               <span>{{ movimiento.descripcion }} - {{ movimiento.fecha }}</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 15px;">
+            <div class="movement-actions">
               <b>${{ movimiento.monto }}</b>
-              <form method="post" action="{% url 'despensa:movimiento_eliminar' movimiento.pk %}" style="display: inline;" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este movimiento?');">
+              <form method="post" action="{% url 'despensa:movimiento_eliminar' movimiento.pk %}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este movimiento?');">
                 {% csrf_token %}
-                <button type="submit" style="background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.85rem; font-weight: 800; padding: 0;">Eliminar</button>
+                <button class="danger-link" type="submit">Eliminar</button>
               </form>
             </div>
           </div>
         {% empty %}
-          <p class="empty-state">Sin movimientos todavia.</p>
+          <p class="empty-state">Sin movimientos todavía.</p>
         {% endfor %}
       </div>
     </article>
@@ -69,23 +69,20 @@
         const btn = document.getElementById('btn-copiar');
         const originalText = btn.innerText;
         btn.innerText = '¡Copiado!';
-        btn.style.backgroundColor = '#dcfae6';
-        btn.style.color = '#067647';
+        btn.classList.add('copied');
         setTimeout(() => {
           btn.innerText = originalText;
-          btn.style.backgroundColor = '';
-          btn.style.color = '';
+          btn.classList.remove('copied');
         }, 2000);
       }).catch(err => {
         alert('No se pudo copiar el resumen: ' + err);
       });
     }
 
-    // Enfocar automáticamente el campo de monto para facilitar la carga en el móvil
+    // Enfocar automáticamente el monto agiliza la carga repetitiva desde el móvil.
     window.addEventListener('DOMContentLoaded', () => {
       const montoInput = document.querySelector('input[name="monto"]');
       if (montoInput) {
-        // Un pequeño retraso asegura que el navegador procese el foco correctamente
         setTimeout(() => {
           montoInput.focus();
         }, 100);

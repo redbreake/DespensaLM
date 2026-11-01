@@ -4,30 +4,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Gestion - Despensa LM{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'despensa/css/gestion.css' %}?v=20261101-1">
+  <title>{% block title %}Gestión - Despensa LM{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'despensa/css/gestion.css' %}?v=20261101-2">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="sidebar-header">
         <a class="brand" href="{% url 'despensa:gestion_dashboard' %}">
-          <img src="{% static 'despensa/img/logo.png' %}" alt="Logo" style="height: 32px; width: 32px; object-fit: cover; border-radius: 4px; flex-shrink: 0;">
-          <strong>Despensa LM</strong>
+          <img src="{% static 'despensa/img/logo.png' %}" alt="" class="brand-logo">
+          <span><strong>Despensa LM</strong><small>Gestión</small></span>
         </a>
-        <button class="menu-toggle" id="menuToggle" aria-label="Menú" onclick="toggleMobileMenu()">
+        <button class="menu-toggle" id="menuToggle" type="button" aria-label="Abrir menú" aria-controls="sidebarContent" aria-expanded="false" onclick="toggleMobileMenu()">
           <span id="menuIcon">☰</span>
         </button>
       </div>
       <div class="sidebar-content" id="sidebarContent">
-        <nav class="side-nav" aria-label="Gestion">
-          <a href="{% url 'despensa:gestion_dashboard' %}">Inicio</a>
-          <a href="{% url 'despensa:producto_lista' %}">Productos</a>
-          <a href="{% url 'despensa:boleta_carga' %}">Cargar boleta</a>
-          <a href="{% url 'despensa:cliente_lista' %}">Clientes y fiados</a>
-          <a href="{% url 'despensa:venta_lista' %}">Caja</a>
-          <a href="{% url 'despensa:catalogo' %}">Ver catalogo</a>
+        {% with page=request.resolver_match.url_name %}
+        <nav class="side-nav" aria-label="Gestión">
+          <a href="{% url 'despensa:gestion_dashboard' %}"{% if page == 'gestion_dashboard' %} class="active" aria-current="page"{% endif %}>Inicio</a>
+          <a href="{% url 'despensa:producto_lista' %}"{% if page == 'producto_lista' or page == 'producto_nuevo' or page == 'producto_editar' %} class="active" aria-current="page"{% endif %}>Productos</a>
+          <a href="{% url 'despensa:boleta_carga' %}"{% if page == 'boleta_carga' %} class="active" aria-current="page"{% endif %}>Cargar boleta</a>
+          <a href="{% url 'despensa:cliente_lista' %}"{% if page == 'cliente_lista' or page == 'cliente_nuevo' or page == 'cliente_detalle' or page == 'cliente_editar' %} class="active" aria-current="page"{% endif %}>Clientes y fiados</a>
+          <a href="{% url 'despensa:venta_lista' %}"{% if page == 'venta_lista' or page == 'venta_nueva' %} class="active" aria-current="page"{% endif %}>Caja</a>
+          <a href="{% url 'despensa:catalogo' %}">Ver catálogo</a>
         </nav>
+        {% endwith %}
         <form method="post" action="{% url 'despensa:logout' %}">
           {% csrf_token %}
           <button class="ghost-button" type="submit">Salir</button>
@@ -51,8 +53,12 @@
     function toggleMobileMenu() {
       const content = document.getElementById('sidebarContent');
       const icon = document.getElementById('menuIcon');
+      const button = document.getElementById('menuToggle');
       content.classList.toggle('active');
-      if (content.classList.contains('active')) {
+      const open = content.classList.contains('active');
+      button.setAttribute('aria-expanded', String(open));
+      button.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+      if (open) {
         icon.textContent = '✕';
       } else {
         icon.textContent = '☰';

@@ -12,6 +12,7 @@
   const whatsappButton = document.querySelector('[data-whatsapp]');
   const clearButton = document.querySelector('[data-clear]');
   const searchInput = document.querySelector('[data-search]');
+  const searchStatus = document.querySelector('[data-search-status]');
   const cartPanel = document.querySelector('[data-cart]');
   const cartToggles = document.querySelectorAll('[data-cart-toggle]');
   const cartCloseButtons = document.querySelectorAll('[data-cart-close]');
@@ -121,6 +122,13 @@
 
       writeCart(cart);
       renderCart();
+      const originalLabel = button.textContent;
+      button.textContent = 'Agregado';
+      button.classList.add('added');
+      window.setTimeout(() => {
+        button.textContent = originalLabel;
+        button.classList.remove('added');
+      }, 900);
     });
   });
 
@@ -139,9 +147,17 @@
   if (searchInput) {
     searchInput.addEventListener('input', () => {
       const term = searchInput.value.trim().toLowerCase();
+      let visible = 0;
       document.querySelectorAll('[data-product]').forEach((product) => {
-        product.hidden = !product.dataset.name.toLowerCase().includes(term);
+        const matches = product.dataset.name.toLowerCase().includes(term);
+        product.hidden = !matches;
+        if (matches) visible += 1;
       });
+      if (searchStatus) {
+        searchStatus.textContent = term
+          ? `${visible} ${visible === 1 ? 'producto encontrado' : 'productos encontrados'}`
+          : '';
+      }
     });
   }
 

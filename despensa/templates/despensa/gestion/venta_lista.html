@@ -13,7 +13,7 @@
 
   <div class="stats-grid">
     <div class="stat-card">
-      <span>Total General Ventas</span>
+      <span>Total general</span>
       <strong>${{ total_general }}</strong>
     </div>
     {% for metodo in resumen_metodos %}
@@ -29,7 +29,7 @@
       <thead>
         <tr>
           <th>Fecha</th>
-          <th>Metodo</th>
+          <th>Método</th>
           <th>Monto</th>
           <th>Notas</th>
         </tr>
@@ -37,10 +37,10 @@
       <tbody>
         {% for venta in ventas %}
           <tr>
-            <td>{{ venta.fecha }}</td>
-            <td>{{ venta.get_metodo_pago_display }}</td>
-            <td>${{ venta.monto_total }}</td>
-            <td>{{ venta.notas|default:'-' }}</td>
+            <td data-label="Fecha">{{ venta.fecha }}</td>
+            <td data-label="Método">{{ venta.get_metodo_pago_display }}</td>
+            <td data-label="Monto">${{ venta.monto_total }}</td>
+            <td data-label="Notas">{{ venta.notas|default:'-' }}</td>
           </tr>
         {% empty %}
           <tr><td colspan="4">No hay ventas registradas.</td></tr>
