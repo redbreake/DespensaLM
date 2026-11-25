@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "agent/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  django:
+    name: Backend Django 5.2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Validar sistema y migraciones
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+
+      - name: Ejecutar pruebas unitarias
+        run: python manage.py test --verbosity=2
+
+      - name: Verificar configuración de despliegue
+        env:
+          DJANGO_DEBUG: "False"
+          DJANGO_SECRET_KEY: "ci-temporary-secret-key-for-deploy-check-only-50-chars-long"
+          DJANGO_ALLOWED_HOSTS: "despensalm.pythonanywhere.com"
+          DJANGO_SESSION_COOKIE_SECURE: "True"
+          DJANGO_CSRF_COOKIE_SECURE: "True"
+          DJANGO_SECURE_HSTS_SECONDS: "3600"
+        run: python manage.py check --deploy --fail-level ERROR
+
+  android:
+    name: App Android (Unit Tests & Debug APK)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: despensa-lm-android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+
+      - name: Compilar APK debug y ejecutar tests unitarios
+        run: |
+          gradle :app:assembleDebug
+          gradle :app:testDebugUnitTest --tests com.example.FlexibleDoubleAdapterTest --tests com.example.SaleRequestSerializationTest

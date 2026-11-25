@@ -29,6 +29,12 @@ interface ProductDao {
     @Query("DELETE FROM cached_products")
     suspend fun clearAllProducts()
 
+    @Transaction
+    suspend fun replaceAllProducts(products: List<CachedProduct>) {
+        clearAllProducts()
+        insertProducts(products)
+    }
+
     @Query("DELETE FROM cached_products WHERE id = :id")
     suspend fun deleteProductById(id: Int)
 }
@@ -49,6 +55,12 @@ interface ClientDao {
 
     @Query("DELETE FROM cached_clients")
     suspend fun clearAllClients()
+
+    @Transaction
+    suspend fun replaceAllClients(clients: List<CachedClient>) {
+        clearAllClients()
+        insertClients(clients)
+    }
 }
 
 @Dao

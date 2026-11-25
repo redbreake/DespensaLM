@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Cliente, CuentaCorriente, Producto, VentaDiaria, VentaItem
+from .models import ApiToken, Cliente, CuentaCorriente, Producto, VentaDiaria, VentaItem
 
 
 @admin.register(Producto)
@@ -31,6 +31,9 @@ class ClienteAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'telefono', 'saldo_total_admin')
     search_fields = ('nombre', 'telefono')
     inlines = (CuentaCorrienteInline,)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).con_saldo()
 
     @admin.display(description='saldo total')
     def saldo_total_admin(self, obj):
@@ -67,3 +70,11 @@ class VentaDiariaAdmin(admin.ModelAdmin):
             return False
 
     inlines = (VentaItemInline,)
+
+
+@admin.register(ApiToken)
+class ApiTokenAdmin(admin.ModelAdmin):
+    list_display = ('user', 'nombre', 'prefijo', 'activo', 'creado', 'ultimo_uso')
+    list_filter = ('activo', 'creado')
+    search_fields = ('user__username', 'nombre', 'prefijo')
+    readonly_fields = ('prefijo', 'token_hash', 'creado', 'ultimo_uso')

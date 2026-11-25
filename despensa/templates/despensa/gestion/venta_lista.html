@@ -30,8 +30,9 @@
         <tr>
           <th>Fecha</th>
           <th>Método</th>
+          <th>Cliente</th>
           <th>Monto</th>
-          <th>Notas</th>
+          <th>Detalle y notas</th>
         </tr>
       </thead>
       <tbody>
@@ -39,11 +40,19 @@
           <tr>
             <td data-label="Fecha">{{ venta.fecha }}</td>
             <td data-label="Método">{{ venta.get_metodo_pago_display }}</td>
+            <td data-label="Cliente">{{ venta.cliente.nombre|default:'-' }}</td>
             <td data-label="Monto">${{ venta.monto_total }}</td>
-            <td data-label="Notas">{{ venta.notas|default:'-' }}</td>
+            <td data-label="Detalle y notas">
+              {% for item in venta.items.all %}
+                <span>{{ item.cantidad }}x {{ item.nombre_producto }}{% if not forloop.last %}, {% endif %}</span>
+              {% endfor %}
+              {% if venta.notas %}
+                <div>{{ venta.notas }}</div>
+              {% endif %}
+            </td>
           </tr>
         {% empty %}
-          <tr><td colspan="4">No hay ventas registradas.</td></tr>
+          <tr><td colspan="5">No hay ventas registradas.</td></tr>
         {% endfor %}
       </tbody>
     </table>

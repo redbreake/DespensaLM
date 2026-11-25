@@ -39,8 +39,7 @@ class ProductRepository(
                         imagen_url = it.imagenUrl
                     )
                 }
-                productDao.clearAllProducts()
-                productDao.insertProducts(cached)
+                productDao.replaceAllProducts(cached)
                 return@withContext true
             }
         } catch (e: Exception) {
@@ -198,8 +197,7 @@ class ClientRepository(
                         saldo_actual = it.saldoActual ?: 0.0
                     )
                 }
-                clientDao.clearAllClients()
-                clientDao.insertClients(cached)
+                clientDao.replaceAllClients(cached)
                 return@withContext true
             }
         } catch (e: Exception) {
@@ -280,6 +278,12 @@ class ClientRepository(
             .take(200)
     }
 }
+
+data class SyncSalesResult(
+    val syncedCount: Int,
+    val failedCount: Int = 0,
+    val lastError: String? = null
+)
 
 class SalesRepository(
     private val offlineSaleDao: OfflineSaleDao,
@@ -377,12 +381,14 @@ class SalesRepository(
         }
     }
 
-    suspend fun syncPendingSales(): Int = withContext(Dispatchers.IO) {
+    suspend fun syncPendingSales(): SyncSalesResult = withContext(Dispatchers.IO) {
         val pending = offlineSaleDao.getUnsyncedSales()
-        if (pending.isEmpty()) return@withContext 0
-        val api = networkService.getApi() ?: return@withContext 0
+        if (pending.isEmpty()) return@withContext SyncSalesResult(0)
+        val api = networkService.getApi() ?: return@withContext SyncSalesResult(0, pending.size, "Sin conexión al servidor.")
 
         var successCount = 0
+        var failedCount = 0
+        var lastError: String? = null
         for (sale in pending) {
             try {
                 val itemsList: List<SaleItemRequest>? = itemsAdapter.fromJson(sale.items_json)
@@ -400,13 +406,18 @@ class SalesRepository(
                     if (response.isSuccessful && response.body()?.success == true) {
                         offlineSaleDao.updateSale(sale.copy(is_synced = true))
                         successCount++
+                    } else {
+                        failedCount++
+                        lastError = apiError(response.code(), response.errorBody()?.string())
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                failedCount++
+                lastError = e.localizedMessage ?: "Error de red al sincronizar venta."
             }
         }
-        return@withContext successCount
+        return@withContext SyncSalesResult(successCount, failedCount, lastError)
     }
 
     private fun apiError(code: Int, body: String?): String {

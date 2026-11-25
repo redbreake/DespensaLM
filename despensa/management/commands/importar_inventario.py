@@ -414,7 +414,7 @@ class Command(BaseCommand):
                         'precio_venta': Decimal('0.00'),
                         'stock_actual': stock,
                         'stock_minimo': 5,
-                        'activo_en_catalogo': True
+                        'activo_en_catalogo': False
                     }
                 )
 

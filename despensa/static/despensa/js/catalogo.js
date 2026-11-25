@@ -18,15 +18,52 @@
   const cartCloseButtons = document.querySelectorAll('[data-cart-close]');
   const mobileViewport = window.matchMedia('(max-width: 820px)');
 
-  const readCart = () => JSON.parse(localStorage.getItem(storageKey) || '[]');
-  const writeCart = (cart) => localStorage.setItem(storageKey, JSON.stringify(cart));
+  const readCart = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (item) =>
+          item &&
+          typeof item.id === 'string' &&
+          typeof item.name === 'string' &&
+          Number.isFinite(Number(item.price)) &&
+          Number(item.price) >= 0 &&
+          Number.isInteger(Number(item.quantity)) &&
+          Number(item.quantity) > 0
+      ).map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: Number(item.price),
+        quantity: Number(item.quantity),
+      }));
+    } catch {
+      try {
+        localStorage.removeItem(storageKey);
+      } catch {
+        // Ignorar errores de almacenamiento restringido.
+      }
+      return [];
+    }
+  };
+
+  const writeCart = (cart) => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(cart));
+    } catch {
+      // Ignorar si el navegador bloquea localStorage.
+    }
+  };
 
   function renderCart() {
     const cart = readCart();
-    cartItems.innerHTML = '';
+    cartItems.replaceChildren();
 
     if (!cart.length) {
-      cartItems.innerHTML = '<p class="empty">Agrega productos para armar tu pedido.</p>';
+      const emptyMessage = document.createElement('p');
+      emptyMessage.className = 'empty';
+      emptyMessage.textContent = 'Agrega productos para armar tu pedido.';
+      cartItems.appendChild(emptyMessage);
     }
 
     let total = 0;
@@ -34,19 +71,37 @@
     cart.forEach((item) => {
       total += item.price * item.quantity;
       count += item.quantity;
+
       const row = document.createElement('div');
       row.className = 'cart-row';
-      row.innerHTML = `
-        <div>
-          <p>${item.name}</p>
-          <small>${formatter.format(item.price)} c/u</small>
-        </div>
-        <div class="qty">
-          <button type="button" data-dec="${item.id}" aria-label="Quitar ${item.name}">-</button>
-          <strong>${item.quantity}</strong>
-          <button type="button" data-inc="${item.id}" aria-label="Sumar ${item.name}">+</button>
-        </div>
-      `;
+
+      const info = document.createElement('div');
+      const title = document.createElement('p');
+      title.textContent = item.name;
+      const unitPrice = document.createElement('small');
+      unitPrice.textContent = `${formatter.format(item.price)} c/u`;
+      info.append(title, unitPrice);
+
+      const qty = document.createElement('div');
+      qty.className = 'qty';
+
+      const decButton = document.createElement('button');
+      decButton.type = 'button';
+      decButton.dataset.dec = item.id;
+      decButton.setAttribute('aria-label', `Quitar ${item.name}`);
+      decButton.textContent = '-';
+
+      const qtyValue = document.createElement('strong');
+      qtyValue.textContent = String(item.quantity);
+
+      const incButton = document.createElement('button');
+      incButton.type = 'button';
+      incButton.dataset.inc = item.id;
+      incButton.setAttribute('aria-label', `Sumar ${item.name}`);
+      incButton.textContent = '+';
+
+      qty.append(decButton, qtyValue, incButton);
+      row.append(info, qty);
       cartItems.appendChild(row);
     });
 

@@ -1,6 +1,7 @@
 package com.example.data.remote
 
 import android.content.Context
+import com.example.BuildConfig
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.Interceptor
@@ -14,6 +15,7 @@ class NetworkService(context: Context) {
     private val prefs = context.getSharedPreferences("despensa_lm_network", Context.MODE_PRIVATE)
     
     val cookieJar = SessionCookieJar(context)
+    val tokenStore = SecureTokenStore(context)
     
     fun getSavedBaseUrl(): String {
         val saved = prefs.getString("base_url", "https://despensalm.pythonanywhere.com/") ?: "https://despensalm.pythonanywhere.com/"
@@ -31,6 +33,7 @@ class NetworkService(context: Context) {
         val sanitized = normalizeBaseUrl(url)
         if (sanitized != getSavedBaseUrl()) {
             cookieJar.clearCookies()
+            tokenStore.clearToken()
         }
         prefs.edit().putString("base_url", sanitized).apply()
         rebuildRetrofit(sanitized)
@@ -61,14 +64,18 @@ class NetworkService(context: Context) {
     @Synchronized
     private fun rebuildRetrofit(baseUrl: String) {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
 
         val headerInterceptor = Interceptor { chain ->
             val original = chain.request()
             val requestBuilder = original.newBuilder()
                 .header("Accept", "application/json")
-                
+
+            tokenStore.getToken()?.let { token ->
+                requestBuilder.header("Authorization", "Bearer $token")
+            }
+
             // If CSRF token is available, inject it
             cookieJar.getCsrfToken()?.let { csrf ->
                 requestBuilder.header("X-CSRFToken", csrf)

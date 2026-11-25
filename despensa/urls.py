@@ -25,6 +25,7 @@ urlpatterns = [
 
     # API Endpoints para App Android
     path('api/login/', views.api_login, name='api_login'),
+    path('api/logout/', views.api_logout, name='api_logout'),
     path('api/productos/buscar/', views.api_producto_buscar, name='api_producto_buscar'),
     path('api/productos/', views.api_producto_lista, name='api_producto_lista'),
     path('api/productos/guardar/', views.api_producto_guardar, name='api_producto_crear'),

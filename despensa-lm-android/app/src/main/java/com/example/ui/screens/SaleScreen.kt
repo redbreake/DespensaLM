@@ -184,12 +184,12 @@ fun SaleScreen(
                     )
                 }
             } else {
-                items(viewModel.cart.entries.toList(), key = { it.key.id }) { entry ->
+                items(viewModel.cart.values.toList(), key = { it.product.id }) { item ->
                     CartProductRow(
-                        product = entry.key,
-                        quantity = entry.value,
-                        onQuantityChange = { viewModel.updateProductCartQty(entry.key, it) },
-                        onRemove = { viewModel.removeProductFromCart(entry.key) }
+                        product = item.product,
+                        quantity = item.quantity,
+                        onQuantityChange = { viewModel.updateProductCartQty(item.product, it) },
+                        onRemove = { viewModel.removeProductFromCart(item.product) }
                     )
                 }
             }
@@ -314,7 +314,7 @@ private fun CheckoutSheet(
             Text("Finalizar venta", style = MaterialTheme.typography.headlineSmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                 Column {
-                    Text("${viewModel.cart.values.sum()} unidades", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${viewModel.cartTotalUnits} unidades", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Total a cobrar", style = MaterialTheme.typography.titleMedium)
                 }
                 Text(money(viewModel.cartSubtotal), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)

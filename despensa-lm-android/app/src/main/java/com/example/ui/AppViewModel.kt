@@ -25,8 +25,15 @@ import com.example.data.repository.ProductRepository
 import com.example.data.repository.SalesRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.*
+
+data class CartItem(
+    val product: CachedProduct,
+    val quantity: Int
+)
 
 class AppViewModel(
     application: Application,
@@ -87,6 +94,9 @@ class AppViewModel(
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (body.success) {
+                        body.token?.takeIf { it.isNotBlank() }?.let { token ->
+                            app.networkService.tokenStore.saveToken(token)
+                        }
                         loginPrefs.edit().apply {
                             putBoolean("is_logged_in", true)
                             putString("username", body.user?.username ?: username)
@@ -116,11 +126,19 @@ class AppViewModel(
     }
 
     fun logout() {
-        loginPrefs.edit().clear().apply()
-        app.networkService.cookieJar.clearCookies()
-        isLoggedIn = false
-        loggedInUsername = ""
-        loggedInEmail = ""
+        viewModelScope.launch {
+            try {
+                app.networkService.getApi()?.logout()
+            } catch (_: Exception) {
+                // Best-effort remote revoke before clearing local credentials.
+            }
+            loginPrefs.edit().clear().apply()
+            app.networkService.tokenStore.clearToken()
+            app.networkService.cookieJar.clearCookies()
+            isLoggedIn = false
+            loggedInUsername = ""
+            loggedInEmail = ""
+        }
     }
 
     // --- Inventory & Sync ---
@@ -148,49 +166,62 @@ class AppViewModel(
     fun syncCatalog() {
         viewModelScope.launch {
             isSyncingCatalog = true
+            // Push-before-Pull: subir ventas pendientes antes de descargar stock y saldos.
+            catalogSyncMessage = "Subiendo ventas pendientes..."
+            val salesSync = salesRepository.syncPendingSales()
+
             catalogSyncMessage = "Sincronizando productos..."
             val prodOk = productRepository.syncProducts()
             catalogSyncMessage = "Sincronizando clientes..."
             val clientOk = clientRepository.syncClients()
-            
-            // Sync any pending local sales
-            catalogSyncMessage = "Subiendo ventas pendientes..."
-            val salesSyncedCount = salesRepository.syncPendingSales()
 
-            catalogSyncMessage = if (prodOk && clientOk) {
-                if (salesSyncedCount > 0) {
-                    "Sincronización exitosa. $salesSyncedCount ventas subidas."
-                } else {
+            catalogSyncMessage = when {
+                salesSync.failedCount > 0 ->
+                    "Atención: ${salesSync.failedCount} venta(s) pendiente(s) con error (${salesSync.lastError ?: "revisar conexión"})."
+                prodOk && clientOk && salesSync.syncedCount > 0 ->
+                    "Sincronización exitosa. ${salesSync.syncedCount} ventas subidas."
+                prodOk && clientOk ->
                     "Catálogo actualizado correctamente."
-                }
-            } else {
-                "Sincronización parcial (offline). $salesSyncedCount ventas subidas."
+                else ->
+                    "Sincronización parcial (offline). ${salesSync.syncedCount} ventas subidas."
             }
             isSyncingCatalog = false
         }
     }
 
     // --- Quick Sale Shopping Cart ---
-    val cart = mutableStateMapOf<CachedProduct, Int>()
+    // Indexado por product.id para evitar duplicados si el stock en Room se actualiza.
+    val cart = mutableStateMapOf<Int, CartItem>()
+
+    val cartTotalUnits: Int
+        get() = cart.values.sumOf { it.quantity }
 
     val cartSubtotal: Double
-        get() = cart.entries.sumOf { it.key.precio_venta * it.value }
+        get() = cart.values
+            .fold(BigDecimal.ZERO) { acc, item ->
+                val unitPrice = BigDecimal.valueOf(item.product.precio_venta).setScale(2, RoundingMode.HALF_UP)
+                acc.add(unitPrice.multiply(BigDecimal.valueOf(item.quantity.toLong())))
+            }
+            .setScale(2, RoundingMode.HALF_UP)
+            .toDouble()
 
     fun addProductToCart(product: CachedProduct, quantity: Int = 1) {
-        // Enforce stock warning constraint but allow sale
-        val currentQty = cart[product] ?: 0
-        cart[product] = currentQty + quantity
+        val current = cart[product.id]
+        val nextQty = (current?.quantity ?: 0) + quantity
+        if (nextQty > 0) {
+            cart[product.id] = CartItem(product = product, quantity = nextQty)
+        }
     }
 
     fun removeProductFromCart(product: CachedProduct) {
-        cart.remove(product)
+        cart.remove(product.id)
     }
 
     fun updateProductCartQty(product: CachedProduct, qty: Int) {
         if (qty <= 0) {
-            cart.remove(product)
+            cart.remove(product.id)
         } else {
-            cart[product] = qty
+            cart[product.id] = CartItem(product = product, quantity = qty)
         }
     }
 
@@ -225,11 +256,11 @@ class AppViewModel(
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val currentDate = sdf.format(Date())
 
-            val itemsRequest = cart.map {
+            val itemsRequest = cart.values.map { item ->
                 SaleItemRequest(
-                    productoId = it.key.id,
-                    cantidad = it.value,
-                    precioUnitario = it.key.precio_venta
+                    productoId = item.product.id,
+                    cantidad = item.quantity,
+                    precioUnitario = item.product.precio_venta
                 )
             }
 
@@ -376,7 +407,7 @@ class AppViewModel(
             deleteProductError = null
             val result = productRepository.deleteProduct(product.id)
             if (result.isSuccess) {
-                cart.remove(product)
+                cart.remove(product.id)
                 onComplete()
             } else {
                 deleteProductError = result.exceptionOrNull()?.message ?: "No se pudo eliminar el producto."

@@ -20,6 +20,7 @@ data class UserInfo(
 @JsonClass(generateAdapter = true)
 data class LoginResponse(
     val success: Boolean,
+    val token: String? = null,
     val user: UserInfo?,
     val error: String?
 )
@@ -117,6 +118,9 @@ interface ApiService {
 
     @POST("api/login/")
     suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
+
+    @POST("api/logout/")
+    suspend fun logout(): Response<BasicSuccessResponse>
 
     @GET("api/productos/buscar/")
     suspend fun buscarProductoPorCodigo(

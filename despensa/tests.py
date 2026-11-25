@@ -3,10 +3,11 @@ import json
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Cliente, CuentaCorriente, Producto, VentaDiaria, VentaItem
+from .models import ApiToken, Cliente, CuentaCorriente, Producto, VentaDiaria, VentaItem
 
 
 class ClienteTests(TestCase):
@@ -26,6 +27,18 @@ class ClienteTests(TestCase):
         )
 
         self.assertEqual(cliente.saldo_total(), Decimal('1000.00'))
+
+    def test_con_saldo_calcula_en_una_sola_consulta(self):
+        c1 = Cliente.objects.create(nombre='Ana')
+        c2 = Cliente.objects.create(nombre='Luis')
+        CuentaCorriente.objects.create(cliente=c1, tipo_movimiento='DEUDA', monto=Decimal('2000.00'))
+        CuentaCorriente.objects.create(cliente=c1, tipo_movimiento='PAGO', monto=Decimal('450.00'))
+        CuentaCorriente.objects.create(cliente=c2, tipo_movimiento='DEUDA', monto=Decimal('800.00'))
+
+        with self.assertNumQueries(1):
+            saldos = {c.nombre: c.saldo_total() for c in Cliente.objects.con_saldo()}
+
+        self.assertEqual(saldos, {'Ana': Decimal('1550.00'), 'Luis': Decimal('800.00')})
 
 
 class CatalogoTests(TestCase):
@@ -55,6 +68,19 @@ class CatalogoTests(TestCase):
         self.assertContains(response, visible.nombre)
         self.assertNotContains(response, 'Sin stock')
         self.assertNotContains(response, 'Inactivo')
+
+    def test_catalogo_oculta_productos_con_precio_cero(self):
+        Producto.objects.create(
+            nombre='Producto sin precio',
+            precio_costo=Decimal('0.00'),
+            precio_venta=Decimal('0.00'),
+            stock_actual=10,
+            activo_en_catalogo=True,
+        )
+
+        response = self.client.get(reverse('despensa:catalogo'))
+
+        self.assertNotContains(response, 'Producto sin precio')
 
     def test_catalogo_tiene_acceso_al_login(self):
         response = self.client.get(reverse('despensa:catalogo'))
@@ -240,6 +266,82 @@ class ApiAppTests(TestCase):
 
         self.assertEqual(response.status_code, 401)
 
+    def test_api_login_emite_token_bearer_y_logout_lo_revoca(self):
+        cache.clear()
+        self.client.logout()
+
+        login_resp = self.client.post(
+            reverse('despensa:api_login'),
+            data=json.dumps({'username': 'operador', 'password': 'clave-test'}),
+            content_type='application/json',
+        )
+        self.assertEqual(login_resp.status_code, 200)
+        token = login_resp.json()['token']
+        self.assertTrue(token)
+        self.assertEqual(ApiToken.objects.filter(activo=True).count(), 1)
+
+        # Limpiar cookies de sesión para verificar autenticación pura por Bearer token
+        self.client.cookies.clear()
+        headers = {'HTTP_AUTHORIZATION': f'Bearer {token}'}
+
+        ok_resp = self.client.get(reverse('despensa:api_cliente_lista'), **headers)
+        self.assertEqual(ok_resp.status_code, 200)
+
+        logout_resp = self.client.post(reverse('despensa:api_logout'), **headers)
+        self.assertEqual(logout_resp.status_code, 200)
+
+        revoked_resp = self.client.get(reverse('despensa:api_cliente_lista'), **headers)
+        self.assertEqual(revoked_resp.status_code, 401)
+
+    def test_api_producto_rechaza_valores_negativos_y_404_devuelve_json(self):
+        resp_negativo = self.client.post(
+            reverse('despensa:api_producto_crear'),
+            data=json.dumps({
+                'nombre': 'Producto inválido',
+                'precio_costo': '-10.00',
+                'precio_venta': '100.00',
+                'stock_actual': 5,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(resp_negativo.status_code, 400)
+        self.assertIn('negativos', resp_negativo.json()['error'])
+
+        resp_stock_neg = self.client.post(
+            reverse('despensa:api_producto_crear'),
+            data=json.dumps({
+                'nombre': 'Stock inválido',
+                'precio_costo': '10.00',
+                'precio_venta': '20.00',
+                'stock_actual': -2,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(resp_stock_neg.status_code, 400)
+
+        resp_404 = self.client.delete(reverse('despensa:api_producto_eliminar', args=[999999]))
+        self.assertEqual(resp_404.status_code, 404)
+        self.assertEqual(resp_404['Content-Type'], 'application/json')
+
+    def test_api_login_limita_intentos_fallidos(self):
+        cache.clear()
+        self.client.logout()
+        for _ in range(10):
+            resp = self.client.post(
+                reverse('despensa:api_login'),
+                data=json.dumps({'username': 'operador', 'password': 'mal'}),
+                content_type='application/json',
+            )
+            self.assertEqual(resp.status_code, 401)
+
+        blocked = self.client.post(
+            reverse('despensa:api_login'),
+            data=json.dumps({'username': 'operador', 'password': 'clave-test'}),
+            content_type='application/json',
+        )
+        self.assertEqual(blocked.status_code, 429)
+        cache.clear()
+
 
 class ApiVentaTests(TestCase):
     def setUp(self):
@@ -396,3 +498,59 @@ class ApiVentaTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(VentaDiaria.objects.count(), 0)
+
+
+class VentaWebTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='operador', password='clave-test')
+        self.client.force_login(self.user)
+        self.producto = Producto.objects.create(
+            nombre='Fideos',
+            precio_costo=Decimal('900.00'),
+            precio_venta=Decimal('1300.00'),
+            stock_actual=4,
+        )
+        self.cliente = Cliente.objects.create(nombre='Carlos')
+
+    def test_venta_web_fiado_crea_items_descuenta_stock_y_registra_deuda(self):
+        response = self.client.post(
+            reverse('despensa:venta_nueva'),
+            data={
+                'fecha': '2026-11-25',
+                'metodo_pago': 'FIADO',
+                'cliente_id': str(self.cliente.id),
+                'notas': 'Compra en mostrador',
+                'items': json.dumps([{'producto_id': self.producto.id, 'cantidad': 2}]),
+            },
+        )
+
+        self.assertRedirects(response, reverse('despensa:venta_lista'))
+        self.producto.refresh_from_db()
+        venta = VentaDiaria.objects.get()
+        item = VentaItem.objects.get()
+
+        self.assertEqual(venta.monto_total, Decimal('2600.00'))
+        self.assertEqual(venta.cliente, self.cliente)
+        self.assertEqual(item.cantidad, 2)
+        self.assertEqual(item.subtotal, Decimal('2600.00'))
+        self.assertEqual(self.producto.stock_actual, 2)
+        self.assertEqual(self.cliente.saldo_total(), Decimal('2600.00'))
+
+    def test_venta_web_sin_stock_rechaza_sin_modificar_datos(self):
+        response = self.client.post(
+            reverse('despensa:venta_nueva'),
+            data={
+                'fecha': '2026-11-25',
+                'metodo_pago': 'EFECTIVO',
+                'cliente_id': '',
+                'notas': '',
+                'items': json.dumps([{'producto_id': self.producto.id, 'cantidad': 10}]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.stock_actual, 4)
+        self.assertEqual(VentaDiaria.objects.count(), 0)
+        self.assertEqual(VentaItem.objects.count(), 0)

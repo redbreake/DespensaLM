@@ -1,8 +1,12 @@
-from django.db import models
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
-from django.core.validators import MinValueValidator
+import hashlib
+import secrets
 from decimal import Decimal
+
+from django.conf import settings
+from django.core.validators import MinValueValidator
+from django.db import models
+from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 
@@ -31,11 +35,41 @@ class Producto(models.Model):
         return self.stock_actual <= self.stock_minimo
 
 
+class ClienteQuerySet(models.QuerySet):
+    def con_saldo(self):
+        cero = Decimal('0.00')
+        return self.annotate(
+            _total_deudas=Coalesce(
+                Sum(
+                    'movimientos__monto',
+                    filter=Q(movimientos__tipo_movimiento=CuentaCorriente.TipoMovimiento.DEUDA),
+                ),
+                cero,
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+            _total_pagos=Coalesce(
+                Sum(
+                    'movimientos__monto',
+                    filter=Q(movimientos__tipo_movimiento=CuentaCorriente.TipoMovimiento.PAGO),
+                ),
+                cero,
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+        ).annotate(
+            saldo_anotado=ExpressionWrapper(
+                F('_total_deudas') - F('_total_pagos'),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )
+        )
+
+
 class Cliente(models.Model):
     nombre = models.CharField(max_length=160)
     telefono = models.CharField(max_length=40, blank=True)
     notas = models.TextField(blank=True)
     creado = models.DateTimeField(auto_now_add=True)
+
+    objects = ClienteQuerySet.as_manager()
 
     class Meta:
         ordering = ['nombre']
@@ -46,13 +80,19 @@ class Cliente(models.Model):
         return self.nombre
 
     def saldo_total(self):
-        deudas = self.movimientos.filter(tipo_movimiento=CuentaCorriente.TipoMovimiento.DEUDA).aggregate(
-            total=Coalesce(Sum('monto'), Decimal('0.00'))
-        )['total']
-        pagos = self.movimientos.filter(tipo_movimiento=CuentaCorriente.TipoMovimiento.PAGO).aggregate(
-            total=Coalesce(Sum('monto'), Decimal('0.00'))
-        )['total']
-        return deudas - pagos
+        if hasattr(self, 'saldo_anotado') and self.saldo_anotado is not None:
+            return self.saldo_anotado
+        resumen = self.movimientos.aggregate(
+            deudas=Coalesce(
+                Sum('monto', filter=Q(tipo_movimiento=CuentaCorriente.TipoMovimiento.DEUDA)),
+                Decimal('0.00'),
+            ),
+            pagos=Coalesce(
+                Sum('monto', filter=Q(tipo_movimiento=CuentaCorriente.TipoMovimiento.PAGO)),
+                Decimal('0.00'),
+            ),
+        )
+        return resumen['deudas'] - resumen['pagos']
 
 
 class CuentaCorriente(models.Model):
@@ -139,3 +179,54 @@ class VentaItem(models.Model):
 
     def __str__(self):
         return f'{self.cantidad} x {self.nombre_producto} - ${self.subtotal}'
+
+
+class ApiToken(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='api_tokens',
+    )
+    nombre = models.CharField(max_length=100, default='App Android')
+    prefijo = models.CharField(max_length=12, db_index=True)
+    token_hash = models.CharField(max_length=64, unique=True)
+    creado = models.DateTimeField(auto_now_add=True)
+    ultimo_uso = models.DateTimeField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-creado']
+        verbose_name = 'token de API'
+        verbose_name_plural = 'tokens de API'
+
+    def __str__(self):
+        estado = 'activo' if self.activo else 'revocado'
+        return f'{self.user} ({self.prefijo}...) - {estado}'
+
+    @staticmethod
+    def hash_token(raw_token):
+        return hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+
+    @classmethod
+    def crear_para_usuario(cls, user, nombre='App Android'):
+        raw_token = secrets.token_urlsafe(32)
+        token = cls.objects.create(
+            user=user,
+            nombre=nombre,
+            prefijo=raw_token[:12],
+            token_hash=cls.hash_token(raw_token),
+        )
+        return token, raw_token
+
+    @classmethod
+    def autenticar(cls, raw_token):
+        if not raw_token:
+            return None
+        token = (
+            cls.objects.select_related('user')
+            .filter(token_hash=cls.hash_token(raw_token), activo=True, user__is_active=True)
+            .first()
+        )
+        if token:
+            cls.objects.filter(pk=token.pk).update(ultimo_uso=timezone.now())
+        return token

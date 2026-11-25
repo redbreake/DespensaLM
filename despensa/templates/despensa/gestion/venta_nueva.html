@@ -1,0 +1,82 @@
+{% extends 'despensa/gestion/base.html' %}
+{% load static %}
+
+{% block title %}Nueva venta - Despensa LM{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Caja diaria</p>
+      <h1>Nueva venta</h1>
+    </div>
+    <a class="secondary-button" href="{% url 'despensa:venta_lista' %}">Volver</a>
+  </header>
+
+  <section class="panel">
+    <form id="sale-form" class="stacked-form" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="items" id="sale-items">
+
+      <div class="two-columns">
+        <div>
+          <label for="sale-date">Fecha</label>
+          <input id="sale-date" name="fecha" type="date" value="{{ fecha_inicial }}" required>
+        </div>
+        <div>
+          <label for="sale-method">Método de pago</label>
+          <select id="sale-method" name="metodo_pago" required>
+            {% for value, label in metodos_pago %}
+              <option value="{{ value }}"{% if metodo_inicial == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div id="sale-client-group">
+        <label for="sale-client">Cliente (obligatorio para Fiado)</label>
+        <select id="sale-client" name="cliente_id">
+          <option value="">Sin cliente asociado</option>
+          {% for cliente in clientes %}
+            <option value="{{ cliente.id }}"{% if cliente_inicial == cliente.id|stringformat:'s' %} selected{% endif %}>{{ cliente.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label for="sale-notes">Notas</label>
+        <input id="sale-notes" name="notas" type="text" maxlength="220" value="{{ notas_inicial }}" placeholder="Opcional (Por defecto: Venta en caja web)">
+      </div>
+
+      <div class="receipt-table-wrap">
+        <table class="receipt-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Subtotal</th>
+              <th><span class="visually-hidden">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody id="sale-rows"></tbody>
+        </table>
+      </div>
+
+      <button class="add-row-button" id="add-sale-row" type="button">+ Agregar producto</button>
+
+      <footer class="receipt-summary">
+        <div>
+          <span>Total calculado</span>
+          <strong id="sale-total">$ 0,00</strong>
+        </div>
+        <button class="primary-button receipt-submit" type="submit">Registrar venta</button>
+      </footer>
+    </form>
+  </section>
+
+  {{ productos_catalogo|json_script:"sale-products-data" }}
+  {{ items_iniciales|json_script:"sale-initial-items" }}
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'despensa/js/venta_nueva.js' %}?v=20261125-1"></script>
+{% endblock %}

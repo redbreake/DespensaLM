@@ -8,3 +8,6 @@ venv/
 staticfiles/
 media/
 backups/
+.codex-remote-attachments/
+.pip-cache/
+.tmp/
